@@ -4,6 +4,12 @@
  */
 const API = process.env.CHRONOS_API ?? 'http://localhost:3101/api';
 
+/** Necessario so quando a API esta em outra maquina (ver server/lib/acesso.ts). */
+const TOKEN = (process.env.CHRONOS_ACCESS_TOKEN ?? '').trim();
+
+/** Versoes do protocolo que este servidor entende; a primeira e a preferida. */
+const PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
+
 interface Tool {
   name: string;
   description: string;
@@ -14,7 +20,11 @@ interface Tool {
 async function call(path: string, init?: RequestInit) {
   const res = await fetch(`${API}${path}`, {
     ...init,
-    headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(TOKEN ? { 'x-chronos-token': TOKEN } : {}),
+      ...(init?.headers ?? {}),
+    },
   });
   const body = await res.json().catch(() => null);
   if (!res.ok) throw new Error(body?.error?.message ?? `HTTP ${res.status}`);
@@ -71,7 +81,17 @@ export const tools: Tool[] = [
         id: { type: 'string' },
         children: {
           type: 'array',
-          description: 'Lista de { title, assignee_id?, estimated_minutes?, due_date? }',
+          description: 'Subtarefas a criar como filhas do no',
+          items: {
+            type: 'object',
+            properties: {
+              title: { type: 'string' },
+              assignee_id: { type: 'string' },
+              estimated_minutes: { type: 'number' },
+              due_date: { type: 'string', description: 'ISO 8601' },
+            },
+            required: ['title'],
+          },
         },
       },
       required: ['id', 'children'],
@@ -107,7 +127,7 @@ export const tools: Tool[] = [
     description: 'Projeta o progresso das metas macro se este conjunto de folhas for concluido.',
     inputSchema: {
       type: 'object',
-      properties: { nodeIds: { type: 'array' } },
+      properties: { nodeIds: { type: 'array', items: { type: 'string' } } },
       required: ['nodeIds'],
     },
     run: (args) =>
@@ -161,17 +181,24 @@ async function main() {
         continue;
       }
 
+      // Notificacoes (sem id) nao recebem resposta, nem de erro.
+      const isRequest = message.id !== undefined && message.id !== null;
+      if (!isRequest) continue;
+
       try {
         if (message.method === 'initialize') {
+          const requested = message.params?.protocolVersion;
           send({
             jsonrpc: '2.0',
             id: message.id,
             result: {
-              protocolVersion: '2024-11-05',
+              protocolVersion: PROTOCOL_VERSIONS.includes(requested) ? requested : PROTOCOL_VERSIONS[0],
               capabilities: { tools: {} },
               serverInfo: { name: 'chronos-flow-v2', version: '2.0.0' },
             },
           });
+        } else if (message.method === 'ping') {
+          send({ jsonrpc: '2.0', id: message.id, result: {} });
         } else if (message.method === 'tools/list') {
           send({
             jsonrpc: '2.0',
@@ -186,12 +213,38 @@ async function main() {
           });
         } else if (message.method === 'tools/call') {
           const tool = tools.find((t) => t.name === message.params?.name);
-          if (!tool) throw new Error(`Ferramenta desconhecida: ${message.params?.name}`);
-          const result = await tool.run(message.params?.arguments ?? {});
+          if (!tool) {
+            send({
+              jsonrpc: '2.0',
+              id: message.id,
+              error: { code: -32602, message: `Ferramenta desconhecida: ${message.params?.name}` },
+            });
+            continue;
+          }
+          // Falha da ferramenta volta como resultado com isError, para o modelo
+          // ler a mensagem e reagir; erro de protocolo fica para o que e protocolo.
+          try {
+            const result = await tool.run(message.params?.arguments ?? {});
+            send({
+              jsonrpc: '2.0',
+              id: message.id,
+              result: { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] },
+            });
+          } catch (error) {
+            send({
+              jsonrpc: '2.0',
+              id: message.id,
+              result: {
+                content: [{ type: 'text', text: `Erro: ${(error as Error).message}` }],
+                isError: true,
+              },
+            });
+          }
+        } else {
           send({
             jsonrpc: '2.0',
             id: message.id,
-            result: { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] },
+            error: { code: -32601, message: `Metodo nao suportado: ${message.method}` },
           });
         }
       } catch (error) {

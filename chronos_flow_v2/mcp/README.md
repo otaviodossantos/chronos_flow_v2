@@ -16,5 +16,41 @@ fazem o que antes exigia uma dezena de chamadas.
 | `assign` | Delega e reporta a carga do membro |
 | `get_risk_map` | Diagnostico por ramificacao |
 
-Configure no cliente MCP apontando para `npm run mcp` nesta pasta, com a API
-rodando em `http://localhost:3101`.
+## Como funciona
+
+O servidor fala MCP por stdio e nao toca no banco: ele chama a API REST local,
+para que a logica de cascata e prioridade viva num lugar so. Por isso **a API
+precisa estar rodando** (`npm run dev:server`, ou o app desktop aberto).
+
+## Configurar no cliente
+
+Use `npx tsx mcp/server.ts`, e **nao** `npm run mcp`: o npm escreve o
+cabecalho `> chronos-flow-v2@2.0.0 mcp` na saida padrao, que e o canal do
+protocolo, e o cliente recebe lixo antes do primeiro JSON. Se preferir o
+script, use `npm run -s mcp` (o `-s` silencia o npm).
+
+Claude Code:
+
+```bash
+claude mcp add chronos -- npx tsx /caminho/para/chronos_flow_v2/mcp/server.ts
+```
+
+Claude Desktop e outros clientes com arquivo de configuracao:
+
+```json
+{
+  "mcpServers": {
+    "chronos": {
+      "command": "npx",
+      "args": ["tsx", "/caminho/para/chronos_flow_v2/mcp/server.ts"]
+    }
+  }
+}
+```
+
+## Variaveis de ambiente
+
+| Variavel | Padrao | Para que serve |
+| --- | --- | --- |
+| `CHRONOS_API` | `http://localhost:3101/api` | Endereco da API |
+| `CHRONOS_ACCESS_TOKEN` | vazio | So quando a API esta em outra maquina; mesmo valor do `.env` dela |

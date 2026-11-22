@@ -136,7 +136,7 @@ React. Um teste de cascata de sete niveis roda em milissegundos, sem banco.
 | `npm run db:baseline` | Registra um banco existente como a migration inicial |
 | `npm run recompute` | Recalcula path, progresso, folhas e impacto de toda a base |
 | `npm run migrate:v1` | Migra os dados da v1 (precisa de `V1_DATABASE_URL`) |
-| `npm run mcp` | Sobe o servidor MCP |
+| `npm run -s mcp` | Sobe o servidor MCP (ver `mcp/README.md`) |
 
 ---
 
