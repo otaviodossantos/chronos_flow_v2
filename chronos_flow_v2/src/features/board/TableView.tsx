@@ -51,18 +51,24 @@ export function TableView({ onOpenWidget }: { onOpenWidget: (node?: NodeDTO | nu
   return (
     <div className="flex h-full flex-col">
       <BoardToolbar onNewProject={() => setNewProject(true)}>
+        {/* So icone: com texto a barra quebrava em duas linhas na janela padrao do app (1440px). */}
         <Button
-          size="sm"
+          size="icon"
           variant="ghost"
           onClick={() => ui.expandMany(board.visible.filter((n) => !n.isLeaf).map((n) => n.id))}
-          title="Abrir todos os subitens"
+          title="Expandir todos os subitens"
+          aria-label="Expandir todos os subitens"
         >
-          <ChevronsUpDown className="h-3.5 w-3.5" />
-          Expandir
+          <ChevronsUpDown className="h-4 w-4" />
         </Button>
-        <Button size="sm" variant="ghost" onClick={ui.collapseAll} title="Recolher os subitens">
-          <ChevronsDownUp className="h-3.5 w-3.5" />
-          Recolher
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={ui.collapseAll}
+          title="Recolher os subitens"
+          aria-label="Recolher os subitens"
+        >
+          <ChevronsDownUp className="h-4 w-4" />
         </Button>
       </BoardToolbar>
 
