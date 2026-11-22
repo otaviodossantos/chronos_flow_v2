@@ -56,3 +56,6 @@ coverage/
 # Xcode
 xcuserdata/
 DerivedData/
+
+# Restos de arquivos abertos em volumes FUSE
+.fuse_hidden*
