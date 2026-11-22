@@ -33,6 +33,8 @@ export interface NodeDTO {
   assignee?: MemberDTO | null;
   blockedBy?: string[];
   blocks?: string[];
+  /** Quantas atualizacoes (feed em markdown) a tarefa tem. So o desktop preenche. */
+  updates_count?: number;
   created_at: string;
   updated_at: string;
   /**
@@ -114,6 +116,27 @@ export interface ReopenResult {
   reopenedAncestors: Array<{ id: string; title: string }>;
   /** Tarefas que dependiam desta e voltaram para BLOCKED. */
   reblocked: Array<{ id: string; title: string }>;
+}
+
+export interface NodeUpdateDTO {
+  id: string;
+  node_id: string;
+  author: string;
+  /** Markdown cru. */
+  body: string;
+  created_at: string;
+  updated_at: string;
+  /** true quando o texto mudou depois de publicado. */
+  edited: boolean;
+}
+
+/** O que sobra de uma troca de status: o no final e o que cada passo fez. */
+export interface SetStatusResult {
+  node: NodeDTO;
+  /** Passos executados, na ordem: complete, reopen e/ou patch. */
+  steps: Array<'complete' | 'reopen' | 'patch'>;
+  completed?: CompleteResult;
+  reopened?: ReopenResult;
 }
 
 export interface FocusItem {

@@ -5,6 +5,7 @@ import { asyncHandler } from '../../lib/asyncHandler.js';
 import { AppError } from '../../lib/errors.js';
 import { ehLocal } from '../../lib/acesso.js';
 import { resetUserCache } from '../../lib/currentUser.js';
+import { hasModel } from '../../lib/schemaGuard.js';
 import * as pareamento from '../../lib/pareamento.js';
 import {
   FORMATO_DO_PACOTE,
@@ -142,6 +143,16 @@ router.post(
         const comTx = (nome: TabelaDoPacote) =>
           (tx as unknown as Record<string, Delegate>)[DELEGATE[nome]];
 
+        /**
+         * As atualizacoes (feed em markdown) nao viajam no pacote: o iPhone nao
+         * tem essa tabela, e incluir a chave quebraria a importacao do lado de
+         * la. Sem isto, apagar as tarefas abaixo levaria o feed junto, em
+         * cascata, a cada transferencia vinda do celular. Entao ele sai antes
+         * e volta depois para toda tarefa que continuar existindo — os ids das
+         * tarefas sao os mesmos nos dois aparelhos.
+         */
+        const feedLocal = hasModel('nodeUpdate') ? await tx.nodeUpdate.findMany() : [];
+
         // Filhas primeiro: o caminho inverso da insercao.
         for (const nome of [...ORDEM].reverse()) {
           await comTx(nome).deleteMany({});
@@ -157,6 +168,17 @@ router.post(
           if (linhas.length > 0) {
             await comTx(nome).createMany({ data: linhas, skipDuplicates: true });
           }
+        }
+
+        if (feedLocal.length > 0) {
+          const nos = new Set(
+            (await tx.node.findMany({ select: { id: true } })).map((n) => n.id),
+          );
+          const mantidas = feedLocal.filter((u) => nos.has(u.node_id));
+          if (mantidas.length > 0) {
+            await tx.nodeUpdate.createMany({ data: mantidas, skipDuplicates: true });
+          }
+          contagem.node_updates_mantidas = mantidas.length;
         }
         return contagem;
       },

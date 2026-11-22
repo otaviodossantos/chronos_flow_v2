@@ -301,3 +301,34 @@ export const resetSchema = z.object({
   /** Marcado: apaga tambem nome, data de nascimento, metas e a chave da IA. */
   includeProfile: z.boolean().optional(),
 });
+
+/**
+ * Atualizacao de tarefa (o feed estilo Monday). O corpo e markdown cru: quem
+ * desenha e a tela, e o MCP escreve no mesmo formato que uma pessoa.
+ */
+export const createNodeUpdateSchema = z.object({
+  node_id: z.string().uuid(),
+  body: z.string().trim().min(1, 'a atualizacao esta vazia').max(20000),
+  /** Quem escreveu. Vazio = o nome do perfil; o MCP manda o do agente. */
+  author: z.string().trim().min(1).max(80).optional(),
+});
+export type CreateNodeUpdateInput = z.infer<typeof createNodeUpdateSchema>;
+
+export const editNodeUpdateSchema = z.object({
+  body: z.string().trim().min(1, 'a atualizacao esta vazia').max(20000),
+});
+
+export const nodeUpdatesQuerySchema = z.object({
+  nodeId: z.string().uuid(),
+});
+
+/**
+ * Troca de status como gesto unico — o que o Kanban faz ao soltar um cartao e
+ * o que o MCP faz com `set_status`. BLOCKED fica de fora de proposito: ele e
+ * derivado das dependencias, e um BLOCKED manual seria desfeito pelo proprio
+ * servidor na proxima sincronizacao.
+ */
+export const setStatusSchema = z.object({
+  status: z.enum(['PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED']),
+});
+export type SetStatusInput = z.infer<typeof setStatusSchema>;

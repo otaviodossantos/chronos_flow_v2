@@ -127,3 +127,17 @@ export const STATUS_LABEL: Record<string, string> = {
 export function levelLabel(depth: number): string {
   return depth === 0 ? 'N0' : `L${depth}`;
 }
+
+/** "agora", "ha 5 min", "ha 3 h", "ontem 14:20", "12 Nov 14:20" — para o feed. */
+export function formatRelativeTime(value: string | Date | null | undefined): string {
+  const d = typeof value === 'string' ? parseISO(value) : value ?? null;
+  if (!d) return '—';
+  const minutes = Math.round((Date.now() - d.getTime()) / 60_000);
+  if (minutes < 1) return 'agora';
+  if (minutes < 60) return `ha ${minutes} min`;
+  const days = diffDays(new Date(), d);
+  if (days === 0) return `ha ${Math.round(minutes / 60)} h`;
+  if (days === 1) return `ontem ${formatTimeOfDay(d)}`;
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return `${sameYear ? formatShortDate(d) : formatDate(d)} ${formatTimeOfDay(d)}`;
+}

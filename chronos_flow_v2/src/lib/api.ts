@@ -9,6 +9,8 @@ import type {
   AiSettings,
   ReopenResult,
   TaskTemplateDTO,
+  NodeUpdateDTO,
+  SetStatusResult,
 } from '@shared/types';
 import type { AiPlan } from '@shared/schemas/index';
 import type { Pacote, ResumoDoPacote } from '@shared/transferencia';
@@ -124,6 +126,22 @@ export const api = {
     request<CompleteResult>(`/nodes/${id}/complete`, { method: 'POST' }),
 
   reopenNode: (id: string) => request<ReopenResult>(`/nodes/${id}/reopen`, { method: 'POST' }),
+
+  /** Troca de status como gesto unico (Kanban, Tabela, MCP). Ver domain/status.ts. */
+  setStatus: (id: string, status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED') =>
+    request<SetStatusResult>(`/nodes/${id}/status`, {
+      method: 'POST',
+      body: JSON.stringify({ status }),
+    }),
+
+  /** Feed de atualizacoes em markdown, mais nova primeiro. */
+  updates: (nodeId: string) => request<NodeUpdateDTO[]>(`/updates${qs({ nodeId })}`),
+  createUpdate: (node_id: string, body: string) =>
+    request<NodeUpdateDTO>('/updates', { method: 'POST', body: JSON.stringify({ node_id, body }) }),
+  editUpdate: (id: string, body: string) =>
+    request<NodeUpdateDTO>(`/updates/${id}`, { method: 'PATCH', body: JSON.stringify({ body }) }),
+  deleteUpdate: (id: string) =>
+    request<{ deleted: boolean }>(`/updates/${id}`, { method: 'DELETE' }),
 
   breakdown: (id: string, body: Record<string, unknown>) =>
     request<{ parent: NodeDTO; children: NodeDTO[] }>(`/nodes/${id}/breakdown`, {

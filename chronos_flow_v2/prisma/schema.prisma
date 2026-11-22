@@ -198,6 +198,7 @@ model Node {
   blocked_by NodeDependency[] @relation("Blocked")
   snapshots  ProgressSnapshot[]
   activity   NodeActivity[]
+  updates    NodeUpdate[]
 
   @@index([user_id, path])
   @@index([parent_id, position])
@@ -246,6 +247,23 @@ model NodeActivity {
 
   @@index([node_id, created_at])
   @@map("node_activity")
+}
+
+/// Atualizacao escrita sobre uma tarefa, no estilo do feed do Monday: texto em
+/// markdown, com autor e data, quantas a tarefa precisar. Nao e o mesmo que
+/// NodeActivity: aquele e o log automatico do que o sistema fez; este e o que
+/// alguem (pessoa ou agente pelo MCP) quis registrar.
+model NodeUpdate {
+  id         String   @id @default(uuid())
+  node_id    String
+  node       Node     @relation(fields: [node_id], references: [id], onDelete: Cascade)
+  author     String   @default("Voce")
+  body       String
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([node_id, created_at])
+  @@map("node_updates")
 }
 
 enum BacklogStatus {

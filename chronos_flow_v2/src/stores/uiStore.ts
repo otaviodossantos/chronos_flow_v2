@@ -7,6 +7,20 @@ import { create } from 'zustand';
  */
 
 const KEY = 'chronos_sidebar_collapsed';
+const VIEW_KEY = 'chronos_project_view';
+
+/** Como a tela de projetos mostra a mesma arvore. */
+export type ProjectView = 'timeline' | 'table' | 'kanban';
+const VIEWS: ProjectView[] = ['timeline', 'table', 'kanban'];
+
+const readView = (): ProjectView => {
+  try {
+    const v = localStorage.getItem(VIEW_KEY) as ProjectView | null;
+    return v && VIEWS.includes(v) ? v : 'timeline';
+  } catch {
+    return 'timeline';
+  }
+};
 
 const read = (): boolean => {
   try {
@@ -29,6 +43,9 @@ interface UiState {
   sidebarCollapsed: boolean;
   toggleSidebar: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
+  /** Visao escolhida na tela de projetos; volta a mesma ao reabrir o app. */
+  projectView: ProjectView;
+  setProjectView: (view: ProjectView) => void;
 }
 
 export const useUiStore = create<UiState>((set, get) => ({
@@ -41,5 +58,14 @@ export const useUiStore = create<UiState>((set, get) => ({
   setSidebarCollapsed: (sidebarCollapsed) => {
     write(sidebarCollapsed);
     set({ sidebarCollapsed });
+  },
+  projectView: readView(),
+  setProjectView: (projectView) => {
+    try {
+      localStorage.setItem(VIEW_KEY, projectView);
+    } catch {
+      /* ignora */
+    }
+    set({ projectView });
   },
 }));

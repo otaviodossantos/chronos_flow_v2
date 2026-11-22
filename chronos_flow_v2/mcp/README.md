@@ -15,6 +15,13 @@ fazem o que antes exigia uma dezena de chamadas.
 | `simulate` | Projecao de progresso para um conjunto de folhas |
 | `assign` | Delega e reporta a carga do membro |
 | `get_risk_map` | Diagnostico por ramificacao |
+| `list_spaces` | Espacos com id, cor e progresso |
+| `list_members` | Membros com id e carga (para `assignee_id`) |
+| `update_node` | Edita titulo, descricao, responsavel, datas, estimativa, criticidade |
+| `set_status` | Muda o status como no Kanban (conclui com cascata, reabre ancestrais) |
+| `add_update` | Publica uma atualizacao em markdown no feed da tarefa |
+| `list_updates` | Le o feed de atualizacoes de uma tarefa |
+| `edit_update` | Reescreve uma atualizacao publicada |
 
 ## Como funciona
 

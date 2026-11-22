@@ -95,6 +95,35 @@ teste que garante isso. O peso vem do esforco estimado quando existe, senao 1.
 A fila do dia ordena por `contrib × criticidade_da_raiz × desbloqueio × aderencia`.
 Tarefa bloqueada tem fator 0: nunca e a numero 1 do dia.
 
+### Visoes: Timeline, Tabela e Kanban
+
+A tela **Projetos** mostra a mesma arvore de tres jeitos, com o seletor no topo.
+Filtros (busca, espaco, responsavel, "Em aberto/Tudo") e a tarefa selecionada
+valem para as tres.
+
+- **Tabela** (estilo Monday): cada meta macro e um grupo colorido; as tarefas
+  sao linhas e as filhas abrem como subitens, em qualquer profundidade. Status,
+  responsavel, prazo e criticidade se editam na celula; duplo clique renomeia.
+  O rodape do grupo mostra a distribuicao por status.
+- **Kanban**: as folhas (o trabalho de fato) em colunas por status. Arrastar
+  para "Concluida" dispara a cascata e destrava dependentes; tirar de
+  "Concluida" reabre os ancestrais. "Bloqueada" e automatica: vem das
+  dependencias e nao aceita cartao solto.
+
+As duas trocas de status passam por `POST /api/nodes/:id/status`, que decide o
+caminho (`server/domain/status.ts`): concluir folha, reabrir ou gravar direto.
+
+### Atualizacoes
+
+Cada tarefa tem um feed de atualizacoes em markdown (aba **Atualizacoes** do
+painel lateral, ou o balao na Tabela e no Kanban): quantas forem precisas,
+com autor e data, editaveis. A descricao continua sendo o que a tarefa *e*;
+o feed e o que foi *acontecendo* com ela. API em `/api/updates`.
+
+O feed nao viaja na transferencia com o iPhone (o app de la nao tem a
+tabela); ao importar um pacote, o desktop guarda as atualizacoes que ja tinha
+para toda tarefa que continuar existindo.
+
 ---
 
 ## Estrutura
@@ -104,11 +133,11 @@ prisma/          schema, migrations, seed
 shared/          contratos zod + tipos, compartilhados entre servidor e cliente
 server/
   domain/        PURO — cascata, impacto, restricoes temporais, grafo. Sem I/O.
-  modules/       rotas por dominio: nodes, spaces, members, focus, reports, life, user
+  modules/       rotas por dominio: nodes, spaces, members, focus, reports, life, user, updates
   db/            client Prisma
   scripts/       recompute, migrate-v1
 src/
-  features/      timeline, focus, team, reports, life, settings
+  features/      timeline, board (tabela e kanban), updates, focus, team, reports, life, settings
   components/ui  shadcn
   stores/        zustand (zoom, expansao, filtros, tema)
 electron/        processo principal, tray, atalho global

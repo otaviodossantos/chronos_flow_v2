@@ -31,6 +31,7 @@ import { DateTimeField } from '@/components/DateField';
 import { useTimelineStore } from '@/stores/timelineStore';
 import { NodeFields, DependencyEditor } from './NodeFields';
 import { BreakdownModal } from '@/features/team/BreakdownModal';
+import { UpdatesPanel } from '@/features/updates/UpdatesPanel';
 
 export function DetailPane({
   nodeId,
@@ -40,6 +41,8 @@ export function DetailPane({
   onOpenWidget?: (node: NodeDTO) => void;
 }) {
   const select = useTimelineStore((s) => s.select);
+  const detailTab = useTimelineStore((s) => s.detailTab);
+  const setDetailTab = useTimelineStore((s) => s.setDetailTab);
   const queryClient = useQueryClient();
   const [newChild, setNewChild] = useState('');
   const [breakdownOpen, setBreakdownOpen] = useState(false);
@@ -207,6 +210,36 @@ export function DetailPane({
         </DialogContent>
       </Dialog>
 
+      <div className="flex gap-4 border-b px-4" role="tablist" aria-label="Painel da tarefa">
+        {([
+          { id: 'details' as const, label: 'Detalhes' },
+          {
+            id: 'updates' as const,
+            label: `Atualizacoes${node.updates_count ? ` (${node.updates_count})` : ''}`,
+          },
+        ]).map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={detailTab === t.id}
+            onClick={() => setDetailTab(t.id)}
+            className={cn(
+              '-mb-px border-b-2 py-2 text-xs font-medium transition-colors',
+              detailTab === t.id
+                ? 'border-foreground text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {detailTab === 'updates' ? (
+        <UpdatesPanel nodeId={node.id} />
+      ) : (
+      <>
       <section className="border-b p-4">
         <div className="mb-2 flex items-center justify-between">
           <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -406,6 +439,8 @@ export function DetailPane({
             ))}
           </ul>
         </section>
+      )}
+      </>
       )}
 
       <BreakdownModal

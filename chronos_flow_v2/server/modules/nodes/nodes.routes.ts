@@ -7,6 +7,7 @@ import {
   breakdownSchema,
   moveNodeSchema,
   rescheduleSchema,
+  setStatusSchema,
   treeQuerySchema,
 } from '../../../shared/schemas/index.js';
 import * as service from './nodes.service.js';
@@ -80,6 +81,15 @@ router.post(
   '/:id/reschedule',
   asyncHandler(async (req, res) => {
     res.json(await service.reschedule(req.params.id, rescheduleSchema.parse(req.body)));
+  }),
+);
+
+/** Troca de status como gesto unico: o Kanban e o MCP passam por aqui. */
+router.post(
+  '/:id/status',
+  asyncHandler(async (req, res) => {
+    const userId = await currentUserId();
+    res.json(await service.setStatus(userId, req.params.id, setStatusSchema.parse(req.body)));
   }),
 );
 

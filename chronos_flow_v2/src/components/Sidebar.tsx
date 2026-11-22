@@ -17,7 +17,8 @@ import { NewSpaceProjectDialog, type NewKind } from '@/components/NewSpaceProjec
 export type Tab = 'timeline' | 'focus' | 'backlog' | 'team' | 'reports' | 'settings';
 
 const NAV: Array<{ id: Tab; label: string; icon: React.ReactNode }> = [
-  { id: 'timeline', label: 'Timeline', icon: <GanttChartSquare className="h-4 w-4" /> },
+  // Timeline, Tabela e Kanban moram juntas aqui: o seletor fica no topo da tela.
+  { id: 'timeline', label: 'Projetos', icon: <GanttChartSquare className="h-4 w-4" /> },
   { id: 'focus', label: 'Meu Foco', icon: <Target className="h-4 w-4" /> },
   { id: 'backlog', label: 'Backlog', icon: <Inbox className="h-4 w-4" /> },
   { id: 'team', label: 'Equipe', icon: <Users className="h-4 w-4" /> },

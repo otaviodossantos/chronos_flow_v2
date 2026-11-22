@@ -22,6 +22,7 @@ import { DetailPane } from './DetailPane';
 import { NewSpaceProjectDialog } from '@/components/NewSpaceProjectDialog';
 import { TemplatePalette } from './TemplatePalette';
 import { useTreeDrag } from './useTreeDrag';
+import { ViewSwitcher } from '@/features/board/BoardToolbar';
 
 const ZOOMS: ZoomLevel[] = ['quarters', 'months', 'weeks', 'days', 'hours'];
 
@@ -155,6 +156,8 @@ export function TimelinePage({
   return (
     <div className="flex h-full flex-col">
       <header className="flex flex-wrap items-center gap-2 border-b px-4 py-2">
+        <ViewSwitcher />
+
         <div className="flex rounded-lg border p-0.5">
           {ZOOMS.map((z) => (
             <button

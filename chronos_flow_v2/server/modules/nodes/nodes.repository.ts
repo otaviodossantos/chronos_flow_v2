@@ -4,7 +4,8 @@ import { subtreePrefix } from '../../domain/path.js';
 export const nodeSelect = {
   include: {
     assignee: true,
-    _count: { select: { children: true } },
+    // `updates` alimenta o balaozinho da Tabela e do Kanban sem uma query a mais.
+    _count: { select: { children: true, updates: true } },
   },
 } as const;
 
