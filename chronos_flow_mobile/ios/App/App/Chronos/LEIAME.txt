@@ -1,0 +1,6 @@
+Esta pasta e gerada por scripts/sincronizar-nativo.mjs a cada "npm run sync".
+Nao edite nada aqui: a fonte e ios-native/, e o proximo sync sobrescreve.
+
+No Xcode, adicione esta pasta ao alvo App uma unica vez
+(Add Files to "App"... > Create groups > alvo App marcado).
+Depois disso as atualizacoes chegam sozinhas, sem abrir o Xcode.

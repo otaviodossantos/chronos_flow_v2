@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <!--
+      `viewport-fit=cover` e o que faz o app ocupar ate as bordas arredondadas;
+      sem ele as areas seguras do iPhone chegam sempre zeradas no CSS.
+      `user-scalable=no` evita o zoom por duplo toque, que num app de arrastar
+      barras na timeline dispara sem querer o tempo todo.
+    -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no, maximum-scale=1"
+    />
+    <meta name="color-scheme" content="light dark" />
+    <title>Chronos Flow</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

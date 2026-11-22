@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: chronos_flow_v2_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: chronos_flow_v2
+    ports:
+      - "5433:5432"
+    volumes:
+      - chronos_v2_data:/var/lib/postgresql/data
+
+volumes:
+  chronos_v2_data:

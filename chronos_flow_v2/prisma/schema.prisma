@@ -1,0 +1,320 @@
+// Chronos Flow v2 — arvore de nos recursiva com progresso em cascata
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum NodeStatus {
+  PENDING
+  IN_PROGRESS
+  BLOCKED
+  COMPLETED
+  CANCELLED
+}
+
+enum DependencyType {
+  FINISH_TO_START
+  START_TO_START
+  FINISH_TO_FINISH
+}
+
+enum TrainingLevel {
+  NOT_STARTED
+  IN_TRAINING
+  AUTONOMOUS
+}
+
+model User {
+  id                       String   @id @default(uuid())
+  name                     String
+  birth_date               DateTime @default("1990-01-01T00:00:00.000Z")
+  life_expectancy          Int      @default(75)
+  daily_focus_goal_minutes Int      @default(240)
+  daily_impact_goal        Decimal  @default(1.0) @db.Decimal(5, 2)
+  timezone                 String   @default("America/Sao_Paulo")
+  gemini_api_key           String?
+  gemini_model             String   @default("gemini-2.5-flash")
+  created_at               DateTime @default(now())
+  updated_at               DateTime @updatedAt
+
+  spaces    Space[]
+  nodes     Node[]
+  members   Member[]
+  backlog   BacklogItem[]
+  templates TaskTemplate[]
+
+  @@map("users")
+}
+
+model Space {
+  id          String   @id @default(uuid())
+  user_id     String
+  user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  color       String   @default("#10B981")
+  position    Int      @default(0)
+  archived    Boolean  @default(false)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  nodes     Node[]
+  members   SpaceMember[]
+  backlog   BacklogItem[]
+  templates TaskTemplate[]
+
+  @@index([user_id, position])
+  @@map("spaces")
+}
+
+/// Modelo de tarefa recorrente: nao gera nada sozinho e nao tem agenda. E um
+/// preenchedor — os campos que voce repetiria a mao toda vez que cria a mesma
+/// tarefa. Vive no espaco porque e la que o repertorio faz sentido.
+model TaskTemplate {
+  id       String @id @default(uuid())
+  user_id  String
+  user     User   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  space_id String
+  space    Space  @relation(fields: [space_id], references: [id], onDelete: Cascade)
+
+  title             String
+  description       String?
+  /// Peso na cascata. Segue a mesma regra do no: derivado do tempo quando
+  /// nao informado.
+  weight            Int     @default(1)
+  estimated_minutes Int?
+  importance        Int     @default(3)
+  /// Responsavel sugerido. Nao e vinculo: a tarefa criada pode trocar.
+  assignee_id       String?
+  assignee          Member? @relation(fields: [assignee_id], references: [id], onDelete: SetNull)
+  color             String  @default("#6366F1")
+
+  /// Quantas tarefas ja nasceram deste modelo, para saber o que nunca se usa.
+  uses         Int       @default(0)
+  last_used_at DateTime?
+
+  position   Int      @default(0)
+  archived   Boolean  @default(false)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([user_id, space_id, position])
+  @@map("task_templates")
+}
+
+model Member {
+  id                  String        @id @default(uuid())
+  user_id             String
+  user                User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  name                String
+  role                String?
+  email               String?
+  whatsapp            String?
+  training_level      TrainingLevel @default(NOT_STARTED)
+  capacity_hours_week Int           @default(40)
+  color               String        @default("#6366F1")
+  notes               String?
+  created_at          DateTime      @default(now())
+  updated_at          DateTime      @updatedAt
+
+  spaces        SpaceMember[]
+  nodes         Node[]
+  backlog_roles BacklogRole[]
+  templates     TaskTemplate[]
+
+  @@index([user_id])
+  @@map("members")
+}
+
+model SpaceMember {
+  id         String   @id @default(uuid())
+  space_id   String
+  space      Space    @relation(fields: [space_id], references: [id], onDelete: Cascade)
+  member_id  String
+  member     Member   @relation(fields: [member_id], references: [id], onDelete: Cascade)
+  created_at DateTime @default(now())
+
+  @@unique([space_id, member_id])
+  @@map("space_members")
+}
+
+model Node {
+  id       String  @id @default(uuid())
+  user_id  String
+  user     User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  space_id String?
+  space    Space?  @relation(fields: [space_id], references: [id], onDelete: SetNull)
+
+  // Arvore: adjacency list como fonte da verdade, materialized path como cache
+  parent_id String?
+  parent    Node?   @relation("NodeTree", fields: [parent_id], references: [id], onDelete: Cascade)
+  children  Node[]  @relation("NodeTree")
+  path      String  @default("")
+  depth     Int     @default(0)
+  position  Int     @default(0)
+
+  title       String
+  description String?
+  status      NodeStatus @default(PENDING)
+
+  // Cascata
+  weight          Int      @default(1)
+  progress        Decimal  @default(0) @db.Decimal(5, 2)
+  manual_progress Decimal? @db.Decimal(5, 2)
+  leaf_count      Int      @default(0)
+  rollup_dirty    Boolean  @default(false)
+
+  /// Despertador por tarefa, um recurso do iPhone. Sem tela no desktop: existe
+  /// para os dois bancos terem as mesmas colunas, que e o que mantem a
+  /// transferencia funcionando nos dois sentidos.
+  alarme      Boolean @default(false)
+
+  // Tempo
+  start_date        DateTime?
+  due_date          DateTime?
+  /// false = start_date e due_date carregam horario; true = a tarefa ocupa o dia inteiro
+  all_day           Boolean   @default(true)
+  estimated_minutes Int?
+  planned_date      DateTime?
+  scheduled_start   String?
+  scheduled_end     String?
+  completed_at      DateTime?
+
+  // Priorizacao
+  importance  Int     @default(3)
+  root_impact Decimal @default(0) @db.Decimal(9, 6)
+
+  assignee_id String?
+  assignee    Member? @relation(fields: [assignee_id], references: [id], onDelete: SetNull)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  blocks     NodeDependency[] @relation("Blocker")
+  blocked_by NodeDependency[] @relation("Blocked")
+  snapshots  ProgressSnapshot[]
+  activity   NodeActivity[]
+
+  @@index([user_id, path])
+  @@index([parent_id, position])
+  @@index([assignee_id, status])
+  @@index([space_id, depth])
+  @@index([planned_date])
+  @@map("nodes")
+}
+
+model NodeDependency {
+  id         String         @id @default(uuid())
+  blocker_id String
+  blocker    Node           @relation("Blocker", fields: [blocker_id], references: [id], onDelete: Cascade)
+  blocked_id String
+  blocked    Node           @relation("Blocked", fields: [blocked_id], references: [id], onDelete: Cascade)
+  type       DependencyType @default(FINISH_TO_START)
+  lag_days   Int            @default(0)
+  created_at DateTime       @default(now())
+
+  @@unique([blocker_id, blocked_id])
+  @@index([blocked_id])
+  @@map("node_dependencies")
+}
+
+model ProgressSnapshot {
+  id          String   @id @default(uuid())
+  node_id     String
+  node        Node     @relation(fields: [node_id], references: [id], onDelete: Cascade)
+  progress    Decimal  @db.Decimal(5, 2)
+  leaf_effort Int      @default(0)
+  captured_on DateTime @db.Date
+
+  @@unique([node_id, captured_on])
+  @@index([captured_on])
+  @@map("progress_snapshots")
+}
+
+model NodeActivity {
+  id         String   @id @default(uuid())
+  node_id    String
+  node       Node     @relation(fields: [node_id], references: [id], onDelete: Cascade)
+  actor      String   @default("Voce")
+  kind       String
+  message    String
+  created_at DateTime @default(now())
+
+  @@index([node_id, created_at])
+  @@map("node_activity")
+}
+
+enum BacklogStatus {
+  INBOX
+  PLANNING
+  CONVERTED
+  ARCHIVED
+}
+
+/// Coisas que ainda nao sao arvore: uma ideia, um evento a organizar, um pedido solto.
+model BacklogItem {
+  id          String        @id @default(uuid())
+  user_id     String
+  user        User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  space_id    String?
+  space       Space?        @relation(fields: [space_id], references: [id], onDelete: SetNull)
+
+  title       String
+  notes       String?
+  status      BacklogStatus @default(INBOX)
+  position    Int           @default(0)
+
+  /// Janela de execucao do projeto. E o que da sentido aos offsets que a IA
+  /// propoe: sem inicio e fim, "daqui a 12 dias" nao ancora em nada.
+  start_date  DateTime?
+  target_date DateTime?
+  context     String?
+
+  /// Teto de tarefas que a IA pode propor, somando todos os niveis da arvore.
+  /// Nulo = sem teto. O corte e aplicado no planner, e nao so pedido no prompt:
+  /// um limite que o modelo pode ignorar nao e um limite.
+  max_tasks   Int?
+
+  /// Rascunho sugerido pela IA, ainda nao aplicado. Editavel antes de virar arvore.
+  ai_plan       Json?
+  ai_model      String?
+  ai_planned_at DateTime?
+
+  /// Meta macro criada quando o rascunho foi aplicado.
+  converted_node_id String?
+
+  roles      BacklogRole[]
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([user_id, status, position])
+  @@map("backlog_items")
+}
+
+/// Papel necessario para o item sair do papel. Dura mais que o rascunho:
+/// e preenchido com uma pessoa real ao longo do tempo.
+model BacklogRole {
+  id              String      @id @default(uuid())
+  backlog_item_id String
+  backlog_item    BacklogItem @relation(fields: [backlog_item_id], references: [id], onDelete: Cascade)
+
+  title           String
+  description     String?
+  /// Carga estimada por semana, para dimensionar a equipe.
+  hours_per_week  Int?
+  headcount       Int         @default(1)
+  position        Int         @default(0)
+
+  /// Preenchido quando voce liga o papel a alguem da equipe.
+  member_id       String?
+  member          Member?     @relation(fields: [member_id], references: [id], onDelete: SetNull)
+
+  created_at      DateTime    @default(now())
+
+  @@index([backlog_item_id, position])
+  @@map("backlog_roles")
+}

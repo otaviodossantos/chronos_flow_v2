@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+		O Info.plist da extensao de widgets.
+
+		O alvo tem `GENERATE_INFOPLIST_FILE = YES`, entao o Xcode acrescenta
+		sozinho as chaves padrao (nome, versao, plataforma). O que ele nao
+		inventa e esta aqui: `NSExtensionPointIdentifier` e o que diz ao sistema
+		que esta extensao e de WidgetKit. Sem ela, a extensao compila e o
+		sistema nao a reconhece como fonte de widgets nem de Live Activity.
+
+		O arquivo existe no repositorio porque o Xcode o gera uma vez, ao criar
+		o alvo, e quem apaga os arquivos de exemplo costuma leva-lo junto — o
+		build entao para com "Build input file cannot be found", apontando para
+		um arquivo que ninguem lembra de ter visto.
+	-->
+	<key>NSExtension</key>
+	<dict>
+		<key>NSExtensionPointIdentifier</key>
+		<string>com.apple.widgetkit-extension</string>
+	</dict>
+</dict>
+</plist>

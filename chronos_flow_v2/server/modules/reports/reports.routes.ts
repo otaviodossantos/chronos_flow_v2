@@ -1,0 +1,207 @@
+import { Router } from 'express';
+import { prisma } from '../../db/client.js';
+import { asyncHandler } from '../../lib/asyncHandler.js';
+import { currentUserId } from '../../lib/currentUser.js';
+import { num } from '../../lib/serialize.js';
+import { blockedNodeIds } from '../../domain/dependencies.js';
+import { startOfDay } from '../../domain/impact.js';
+
+const router = Router();
+
+router.get(
+  '/velocity',
+  asyncHandler(async (_req, res) => {
+    const userId = await currentUserId();
+    const since = new Date();
+    since.setDate(since.getDate() - 30);
+
+    const [completed, withEstimate, depthAgg, roots] = await Promise.all([
+      prisma.node.count({
+        where: { user_id: userId, completed_at: { gte: since }, children: { none: {} } },
+      }),
+      prisma.node.findMany({
+        where: {
+          user_id: userId,
+          completed_at: { gte: since },
+          estimated_minutes: { not: null },
+          children: { none: {} },
+        },
+        select: { estimated_minutes: true, created_at: true, completed_at: true },
+      }),
+      prisma.node.aggregate({ where: { user_id: userId }, _avg: { depth: true }, _max: { depth: true } }),
+      prisma.node.findMany({
+        where: { user_id: userId, parent_id: null },
+        select: { id: true, progress: true },
+      }),
+    ]);
+
+    // Desvio medio entre esforco previsto e tempo real de ponta a ponta.
+    const deviations = withEstimate
+      .filter((n) => n.completed_at)
+      .map((n) => {
+        const actual = (n.completed_at!.getTime() - n.created_at.getTime()) / 60_000;
+        const planned = n.estimated_minutes ?? 1;
+        return (actual - planned) / planned;
+      });
+    const avgDeviation =
+      deviations.length > 0
+        ? Math.round((deviations.reduce((a, b) => a + b, 0) / deviations.length) * 1000) / 10
+        : 0;
+
+    const edges = await prisma.nodeDependency.findMany({
+      where: { blocked: { user_id: userId } },
+      select: { blocker_id: true, blocked_id: true },
+    });
+    const statusRows = await prisma.node.findMany({
+      where: { user_id: userId },
+      select: { id: true, status: true },
+    });
+    const blocked = blockedNodeIds(edges, new Map<string, string>(statusRows.map((s: { id: string; status: string }) => [s.id, s.status])));
+
+    const avgRootProgress =
+      roots.length > 0
+        ? Math.round((roots.reduce((s, r) => s + num(r.progress), 0) / roots.length) * 10) / 10
+        : 0;
+
+    res.json({
+      completedLeaves30d: completed,
+      avgRootProgress,
+      bottlenecks: blocked.size,
+      estimateDeviationPercent: avgDeviation,
+      avgDepth: Math.round((depthAgg._avg.depth ?? 0) * 10) / 10,
+      maxDepth: depthAgg._max.depth ?? 0,
+    });
+  }),
+);
+
+router.get(
+  '/risk-map',
+  asyncHandler(async (_req, res) => {
+    const userId = await currentUserId();
+    const roots = await prisma.node.findMany({
+      where: { user_id: userId, parent_id: null },
+      include: {
+        assignee: { select: { name: true } },
+        space: { select: { name: true, color: true } },
+      },
+      orderBy: { position: 'asc' },
+    });
+
+    const edges = await prisma.nodeDependency.findMany({
+      where: { blocked: { user_id: userId } },
+      select: { blocker_id: true, blocked_id: true },
+    });
+    const statusRows = await prisma.node.findMany({
+      where: { user_id: userId },
+      select: { id: true, status: true, path: true, title: true, due_date: true },
+    });
+    const blocked = blockedNodeIds(edges, new Map<string, string>(statusRows.map((s: { id: string; status: string }) => [s.id, s.status])));
+    const today = startOfDay(new Date());
+
+    const rows = await Promise.all(
+      roots.map(async (root) => {
+        const subtree = statusRows.filter((s) => s.path.startsWith(`${root.path}/`));
+        const subtreeIds = new Set(subtree.map((s) => s.id));
+        const blockedHere = [...blocked].filter((id) => subtreeIds.has(id));
+        const overdue = subtree.filter(
+          (s) => s.due_date && s.due_date < today && s.status !== 'COMPLETED',
+        );
+        const agg = await prisma.node.aggregate({
+          where: { path: { startsWith: `${root.path}/` } },
+          _max: { depth: true },
+        });
+
+        const progress = num(root.progress);
+        const risk = blockedHere.length > 0 || overdue.length > 0
+          ? progress < 30
+            ? 'critical'
+            : 'warning'
+          : progress >= 60
+            ? 'good'
+            : 'warning';
+
+        return {
+          id: root.id,
+          title: root.title,
+          space: root.space ? { name: root.space.name, color: root.space.color } : null,
+          owner: root.assignee?.name ?? null,
+          progress,
+          childCount: subtree.length,
+          levels: (agg._max.depth ?? root.depth) - root.depth,
+          blocked: blockedHere.length,
+          overdue: overdue.length,
+          risk,
+          focalPoint:
+            blockedHere.length > 0
+              ? subtree.find((s) => s.id === blockedHere[0])?.title ?? null
+              : overdue[0]?.title ?? null,
+        };
+      }),
+    );
+
+    res.json({ roots: rows });
+  }),
+);
+
+router.get(
+  '/progress-history',
+  asyncHandler(async (req, res) => {
+    const userId = await currentUserId();
+    const days = Number(req.query.days ?? 30);
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+
+    const snapshots = await prisma.progressSnapshot.findMany({
+      where: { node: { user_id: userId, parent_id: null }, captured_on: { gte: since } },
+      include: { node: { select: { id: true, title: true } } },
+      orderBy: { captured_on: 'asc' },
+    });
+
+    res.json({
+      series: snapshots.map((s) => ({
+        nodeId: s.node.id,
+        title: s.node.title,
+        date: s.captured_on.toISOString().slice(0, 10),
+        progress: num(s.progress),
+        leafEffort: s.leaf_effort,
+      })),
+    });
+  }),
+);
+
+/** Grava o retrato do dia — chamado no boot e apos conclusoes. */
+export async function captureSnapshots(userId: string) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const roots = await prisma.node.findMany({
+    where: { user_id: userId, parent_id: null },
+    select: { id: true, progress: true, path: true },
+  });
+
+  for (const root of roots) {
+    const effort = await prisma.node.aggregate({
+      where: {
+        path: { startsWith: `${root.path}/` },
+        completed_at: { gte: today },
+      },
+      _sum: { estimated_minutes: true },
+    });
+
+    await prisma.progressSnapshot.upsert({
+      where: { node_id_captured_on: { node_id: root.id, captured_on: today } },
+      create: {
+        node_id: root.id,
+        captured_on: today,
+        progress: num(root.progress),
+        leaf_effort: effort._sum.estimated_minutes ?? 0,
+      },
+      update: {
+        progress: num(root.progress),
+        leaf_effort: effort._sum.estimated_minutes ?? 0,
+      },
+    });
+  }
+}
+
+export default router;

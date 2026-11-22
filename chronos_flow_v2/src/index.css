@@ -1,0 +1,116 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Tema herdado da v1 — branco limpo, cinza claro, texto carvao */
+    --background: 0 0% 100%;
+    --foreground: 0 0% 9%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 9%;
+    --primary: 0 0% 9%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 0 0% 96.1%;
+    --secondary-foreground: 0 0% 9%;
+    --muted: 0 0% 96.1%;
+    --muted-foreground: 0 0% 45.1%;
+    --accent: 0 0% 96.1%;
+    --accent-foreground: 0 0% 9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 89.8%;
+    --input: 0 0% 89.8%;
+    --ring: 0 0% 9%;
+    --radius: 0.5rem;
+
+    /* Semaforo da cascata — o unico acrescimo da v2 */
+    --status-good: 160 84% 39%;
+    --status-warning: 38 92% 50%;
+    --status-critical: 0 84% 60%;
+  }
+
+  .dark {
+    --background: 0 0% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 6%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 6%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 0 0% 9%;
+    --secondary: 0 0% 14.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 14.9%;
+    --muted-foreground: 0 0% 63.9%;
+    --accent: 0 0% 14.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 14.9%;
+    --input: 0 0% 14.9%;
+    --ring: 0 0% 83.1%;
+
+    --status-good: 160 84% 39%;
+    --status-warning: 38 92% 50%;
+    --status-critical: 0 72% 51%;
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+  body {
+    @apply bg-background text-foreground;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  }
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(128,128,128,0.25); border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(128,128,128,0.4); }
+
+.app-drag { -webkit-app-region: drag; user-select: none; }
+.app-no-drag { -webkit-app-region: no-drag; }
+
+/* Grade da timeline desenhada em CSS: nada de mil divs para as linhas verticais */
+.timeline-grid {
+  background-image: linear-gradient(to right, hsl(var(--border) / 0.6) 1px, transparent 1px);
+  background-repeat: repeat;
+}
+
+/* ==========================================================================
+   Widget flutuante de foco
+   ========================================================================== */
+
+/* Janela nativa sem moldura: o fundo precisa ser realmente transparente. */
+html.is-floating-window,
+html.is-floating-window body {
+  background: transparent !important;
+  overflow: hidden !important;
+  user-select: none;
+}
+
+.floating-glass {
+  background: rgba(14, 14, 18, 0.92);
+  backdrop-filter: blur(14px) saturate(150%);
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 16px 36px -12px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  transform: translateZ(0);
+  will-change: transform;
+  contain: layout style;
+}
+
+.floating-glass-pill {
+  background: rgba(14, 14, 18, 0.94);
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.65);
+  transform: translateZ(0);
+  will-change: transform;
+  contain: layout style;
+}

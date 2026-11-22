@@ -1,0 +1,58 @@
+# ==============================================================================
+# Chronos Flow — repositorio da v2 (desktop + iPhone)
+# ==============================================================================
+# Lista de permissao: so entram no repositorio o que esta liberado abaixo.
+# A v1 (chronos_flow/) tem repositorio proprio; _transfer/, "Claude outputs/"
+# e os .tgz soltos sao material de trabalho local.
+
+/*
+!/.gitignore
+!/README.md
+!/LICENSE
+!/chronos_flow_v2/
+!/chronos_flow_mobile/
+
+# ------------------------------------------------------------------------------
+# Regras gerais (valem para as duas pastas)
+# ------------------------------------------------------------------------------
+node_modules/
+dist/
+dist-server/
+dist-electron/
+dist-mcp/
+release/
+build/
+coverage/
+
+# Segredos
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.mobileprovision
+
+# Bancos locais
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+
+# Arquivos temporarios e backups
+*.timestamp-*.mjs
+*.antes-do-*
+*.tsbuildinfo
+*.log
+*.tgz
+
+# Sistema / editores
+.DS_Store
+._*
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Xcode
+xcuserdata/
+DerivedData/

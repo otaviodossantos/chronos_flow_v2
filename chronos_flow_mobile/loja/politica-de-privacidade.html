@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Como o aplicativo Chronos Flow trata os seus dados: o que fica no iPhone, o que sai e quando.">
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :root {
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  img { max-width: 100%; }
+</style>
+<title>Privacidade do Chronos Flow</title>
+<style>
+  /* Coluna única de leitura. Cada permissão carrega um selo que diz a única
+     coisa que importa: aquele dado fica no iPhone ou sai dele. */
+  :root {
+    --bg: #ffffff;
+    --surface: #f7f7f6;
+    --fg: #16181a;
+    --muted: #6b6f74;
+    --line: #e3e3e1;
+    --fica: #0f9d6e;
+    --sai: #c2820b;
+    --display: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --corpo: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+    --util: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0b0c0d;
+      --surface: #141618;
+      --fg: #f2f3f3;
+      --muted: #9ba1a7;
+      --line: #25282b;
+      --fica: #2dcf96;
+      --sai: #e0a93a;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0b0c0d;
+    --surface: #141618;
+    --fg: #f2f3f3;
+    --muted: #9ba1a7;
+    --line: #25282b;
+    --fica: #2dcf96;
+    --sai: #e0a93a;
+    color-scheme: dark;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--corpo);
+    font-size: 1.0625rem;
+    line-height: 1.68;
+    margin: 0;
+  }
+  .folha {
+    max-width: 40rem;
+    margin: 0 auto;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 3.5rem 4rem;
+  }
+
+  .marca {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 0.8125rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 1.75rem;
+  }
+  h1 {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: clamp(2rem, 7vw, 2.75rem);
+    line-height: 1.12;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+    margin: 0 0 0.75rem;
+  }
+  .data {
+    font-family: var(--util);
+    font-size: 0.8125rem;
+    color: var(--muted);
+    margin: 0 0 2.5rem;
+  }
+  .abertura {
+    font-size: 1.1875rem;
+    line-height: 1.6;
+    margin: 0 0 3rem;
+  }
+  .abertura strong { font-weight: 600; }
+
+  h2 {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: 1.3125rem;
+    letter-spacing: -0.01em;
+    line-height: 1.3;
+    text-wrap: balance;
+    margin: 3rem 0 0.875rem;
+    padding-top: 1.75rem;
+    border-top: 1px solid var(--line);
+  }
+  h3 {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: 1.0625rem;
+    line-height: 1.35;
+    margin: 2rem 0 0.5rem;
+  }
+  p { margin: 0 0 1.125rem; }
+  ul { margin: 0 0 1.125rem; padding-left: 1.25rem; }
+  li { margin-bottom: 0.5rem; }
+  strong { font-weight: 600; }
+
+  /* O selo: a resposta curta de cada permissão, antes do parágrafo. */
+  .selo {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4375rem;
+    font-family: var(--util);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    padding: 0.25rem 0.625rem 0.25rem 0.5rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    margin-bottom: 0.625rem;
+  }
+  .selo::before {
+    content: "";
+    width: 0.4375rem;
+    height: 0.4375rem;
+    border-radius: 50%;
+    background: currentColor;
+  }
+  .selo.fica { color: var(--fica); }
+  .selo.sai { color: var(--sai); }
+
+  .cartao {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 0.5rem;
+    padding: 1.5rem;
+    margin: 0 0 1.25rem;
+  }
+  .cartao p:last-child { margin-bottom: 0; }
+  .cartao ol { margin: 0; padding-left: 1.25rem; }
+  .cartao li:last-child { margin-bottom: 0; }
+
+  .contato {
+    font-family: var(--util);
+    font-size: 1.0625rem;
+    font-weight: 600;
+    word-break: break-word;
+  }
+  .contato a { color: inherit; }
+  footer {
+    margin-top: 3.5rem;
+    padding-top: 1.75rem;
+    border-top: 1px solid var(--line);
+    font-family: var(--util);
+    font-size: 0.8125rem;
+    color: var(--muted);
+  }
+  a { color: var(--fg); text-decoration-color: var(--muted); text-underline-offset: 0.2em; }
+  a:focus-visible { outline: 2px solid var(--fica); outline-offset: 3px; border-radius: 2px; }
+</style>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+</head>
+<body>
+<main class="folha">
+  <p class="marca">Chronos Flow</p>
+  <h1>Política de Privacidade</h1>
+  <p class="data">Última atualização: 21 de outubro de 2026</p>
+
+  <p class="abertura">
+    O Chronos Flow é um aplicativo de organização de projetos e tarefas.
+    <strong>Quase nada sai do seu iPhone, e o que sai, sai porque você pediu.</strong>
+    Esta página explica exatamente o quê, quando e para onde.
+  </p>
+
+  <h2>Não há conta, cadastro nem servidor nosso</h2>
+  <p>
+    O Chronos Flow não pede email, não cria conta e não tem login. Nós não
+    operamos nenhum servidor que receba os seus dados, e não temos como ver,
+    acessar ou recuperar nada do que você escreve no aplicativo.
+  </p>
+  <p>
+    Todo o conteúdo — projetos, tarefas, datas, membros da equipe, estimativas,
+    anotações — fica guardado num banco de dados local no próprio aparelho. Se
+    você apagar o aplicativo, esses dados são apagados junto, e não existe cópia
+    em lugar nenhum.
+  </p>
+
+  <h2>O que o aplicativo acessa no seu iPhone</h2>
+
+  <h3>Contatos</h3>
+  <p class="selo fica">Fica no aparelho</p>
+  <p>
+    Se você usar o botão “Da agenda”, na tela de Equipe, o aplicativo pede
+    permissão para ler os seus contatos. Os que você escolher viram membros da
+    equipe e são gravados no banco de dados local.
+  </p>
+  <p>
+    Os contatos não são enviados para lugar nenhum, não são copiados em massa e
+    não servem para nada além de preencher nome, email e telefone sem que você
+    precise digitar. Você pode negar esta permissão e continuar usando o
+    aplicativo normalmente, cadastrando as pessoas à mão.
+  </p>
+
+  <h3>Rede local</h3>
+  <p class="selo fica">Fica entre os seus aparelhos</p>
+  <p>
+    A função “Levar para outro aparelho” procura um computador rodando a versão
+    desktop do Chronos na mesma rede Wi-Fi que você, para transferir os seus
+    dados diretamente de um para o outro.
+  </p>
+  <p>
+    A transferência acontece apenas entre os seus dois aparelhos, na sua própria
+    rede. Nenhum dado passa pela internet nem por servidor de terceiros nesse
+    caminho.
+  </p>
+
+  <h3>Notificações</h3>
+  <p class="selo fica">Fica no aparelho</p>
+  <p>
+    Se você ligar os avisos de tarefa, o aplicativo agenda notificações locais
+    no próprio iPhone. Elas são criadas e disparadas pelo sistema operacional do
+    seu aparelho, sem passar por servidor nenhum. Não usamos notificações push,
+    e por isso não existe nenhum identificador de dispositivo registrado
+    conosco.
+  </p>
+
+  <h3>Microfone</h3>
+  <p class="selo sai">Enviado ao Google, a seu pedido</p>
+  <p>
+    Os campos de texto têm um botão de microfone para você ditar em vez de
+    digitar. Este é um dos dois casos em que um dado sai do aparelho, e está
+    descrito na seção seguinte.
+  </p>
+
+  <h2>O que sai do aparelho, e só quando você pede</h2>
+  <p>
+    Duas funções do Chronos Flow usam a API do <strong>Google Gemini</strong>.
+    As duas são opcionais, as duas só funcionam se você configurar a sua própria
+    chave de API nos Ajustes, e as duas só são acionadas por uma ação sua:
+  </p>
+  <div class="cartao">
+    <ol>
+      <li>
+        <strong>Planejamento por IA</strong>, no Backlog. Quando você pede um
+        plano, o título, as anotações e o contexto daquele item são enviados ao
+        Google, que devolve uma sugestão de tarefas.
+      </li>
+      <li>
+        <strong>Ditado por microfone</strong>, nos campos de texto. Quando você
+        termina de falar, o áudio gravado é enviado ao Google, que devolve o
+        texto transcrito.
+      </li>
+    </ol>
+  </div>
+  <p>
+    O que é enviado é apenas o conteúdo daquela ação específica — não o seu
+    banco de dados, não os seus outros projetos, não os seus contatos. A chave
+    de API é sua, fica guardada apenas no seu aparelho, e a comunicação é feita
+    diretamente entre o seu iPhone e o Google: nós não intermediamos nem
+    recebemos cópia.
+  </p>
+  <p>
+    O tratamento desses dados pelo Google é regido pelos termos do Google, não
+    pelos nossos. Se você não configurar uma chave, nenhuma dessas duas funções
+    é acionada e nada sai do seu aparelho.
+  </p>
+
+  <h2>O que o aplicativo não faz</h2>
+  <ul>
+    <li>Não coleta dados de uso, estatísticas de navegação nem relatórios de falha.</li>
+    <li>Não contém SDK de análise, de publicidade ou de rastreamento.</li>
+    <li>Não rastreia você entre aplicativos ou sites, e não usa o identificador de publicidade do iOS.</li>
+    <li>Não vende, aluga nem compartilha dados com terceiros — além da chamada ao Google descrita acima, feita a seu pedido.</li>
+    <li>Não acessa localização, fotos, saúde, calendário nem dados financeiros.</li>
+  </ul>
+
+  <h2>Crianças</h2>
+  <p>
+    O Chronos Flow é uma ferramenta de trabalho, não se destina a crianças e não
+    coleta deliberadamente dados de menores de 13 anos.
+  </p>
+
+  <h2>Os seus direitos</h2>
+  <p>
+    Como não guardamos nada, não há o que solicitar, corrigir ou pedir que seja
+    apagado conosco. Você tem controle direto sobre todos os seus dados dentro
+    do aplicativo:
+  </p>
+  <ul>
+    <li><strong>Exportar</strong>: Mais → Ajustes → Levar para outro aparelho → exportar arquivo.</li>
+    <li><strong>Apagar tudo</strong>: desinstalar o aplicativo apaga o banco de dados local.</li>
+    <li><strong>Revogar permissões</strong>: Ajustes do iPhone → Chronos Flow.</li>
+  </ul>
+
+  <h2>Mudanças nesta política</h2>
+  <p>
+    Se esta política mudar, a data no topo será atualizada e a versão nova
+    ficará disponível neste mesmo endereço.
+  </p>
+
+  <h2>Contato</h2>
+  <p>Dúvidas sobre esta política ou sobre privacidade no Chronos Flow:</p>
+  <p class="contato"><a href="mailto:contato@seudominio.com.br">contato@seudominio.com.br</a></p>
+
+  <footer>Chronos Flow · LabDS · 2026</footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1792466900773,
+      "tag": "0000_curious_penance",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1792529736146,
+      "tag": "0001_limite_de_tarefas",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1792538064762,
+      "tag": "0002_avisos",
+      "breakpoints": true
+    }
+  ]
+}

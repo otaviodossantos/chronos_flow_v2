@@ -1,0 +1,1 @@
+ALTER TABLE `backlog_items` ADD `max_tasks` integer;
