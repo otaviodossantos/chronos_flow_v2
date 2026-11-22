@@ -39,6 +39,22 @@ npm run dev
 Detalhes em [`chronos_flow_v2/README.md`](chronos_flow_v2/README.md) e
 [`chronos_flow_mobile/README.md`](chronos_flow_mobile/README.md).
 
+## Licenca
+
+Copyright (c) 2026 Otávio dos Santos.
+
+Distribuido sob a [PolyForm Noncommercial 1.0.0](LICENSE):
+
+- **Liberado:** uso pessoal, estudo, pesquisa, projetos de hobby e uso por
+  ONGs, instituicoes de ensino e orgaos publicos. Pode copiar, modificar e
+  compartilhar, mantendo o aviso de copyright e o texto da licenca.
+- **Nao liberado:** qualquer uso comercial — vender, embutir em produto pago ou
+  usar dentro de uma empresa — sem autorizacao.
+
+Quer usar comercialmente? Abra uma
+[issue](https://github.com/otaviodossantos/chronos_flow_v2/issues) para
+conversarmos sobre uma licenca comercial.
+
 ## v1
 
 A versao anterior (tabela plana de tarefas) vive em um repositorio separado:

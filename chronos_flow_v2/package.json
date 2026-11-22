@@ -3,6 +3,8 @@
   "productName": "Chronos Flow",
   "version": "2.0.0",
   "description": "Gestao de projetos com tarefas recursivas, progresso em cascata e timeline telescopica",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "author": "Otávio dos Santos",
   "main": "dist-electron/main.js",
   "type": "module",
   "scripts": {

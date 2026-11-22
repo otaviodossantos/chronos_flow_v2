@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "description": "Chronos Flow no iPhone. Tudo local, sem servidor.",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "author": "Otávio dos Santos",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
