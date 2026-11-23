@@ -1,7 +1,9 @@
 import { Router } from 'express';
 import { prisma } from '../../db/client.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
-import { currentUserId, resetUserCache } from '../../lib/currentUser.js';
+import { currentUserId } from '../../lib/currentUser.js';
+import { AppError } from '../../lib/errors.js';
+import { somenteSessao } from '../../lib/sessao.js';
 import { num } from '../../lib/serialize.js';
 import { updateUserSchema, resetSchema } from '../../../shared/schemas/index.js';
 import { recomputeAll } from '../nodes/cascade.service.js';
@@ -29,6 +31,7 @@ router.get(
 
 router.patch(
   '/',
+  somenteSessao,
   asyncHandler(async (req, res) => {
     const userId = await currentUserId();
     const body = updateUserSchema.parse(req.body);
@@ -85,9 +88,29 @@ router.get(
  */
 router.post(
   '/reset',
+  somenteSessao,
   asyncHandler(async (req, res) => {
     const userId = await currentUserId();
     const { includeProfile } = resetSchema.parse(req.body);
+
+    // Apagar o proprio perfil sendo o ultimo admin deixaria o servidor sem
+    // ninguem para administra-lo.
+    if (includeProfile) {
+      const eu = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { papel: true, dono: true } });
+      if (eu.dono) {
+        throw new AppError(
+          'CONTA_DONA',
+          'A conta dona do servidor nao pode ser apagada. Da para apagar os projetos, mantendo o perfil.',
+        );
+      }
+      const admins = await prisma.user.count({ where: { papel: 'ADMIN', bloqueado_em: null } });
+      if (eu.papel === 'ADMIN' && admins <= 1) {
+        throw new AppError(
+          'VALIDATION_FAILED',
+          'Voce e o unico administrador. Promova outra conta a admin antes de apagar a sua.',
+        );
+      }
+    }
 
     const deleted = await prisma.$transaction(async (tx) => {
       // Ordem explicita em vez de confiar no cascade de cada relacao.
@@ -118,9 +141,6 @@ router.post(
         backlog: backlog.count,
       };
     });
-
-    // O id em cache apontaria para um usuario que nao existe mais.
-    if (includeProfile) resetUserCache();
 
     res.json({ reset: true, profileRemoved: Boolean(includeProfile), deleted });
   }),

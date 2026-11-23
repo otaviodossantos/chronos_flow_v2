@@ -20,7 +20,8 @@
       "@db/*": ["db/*"],
       "@core/*": ["../chronos_flow_v2/server/domain/*"],
       "@shared/*": ["../chronos_flow_v2/shared/*"],
-      "@ia/*": ["../chronos_flow_v2/server/modules/ai/*"]
+      "@ia/*": ["../chronos_flow_v2/server/modules/ai/*"],
+      "@desktop/*": ["../chronos_flow_v2/*"]
     }
   },
   "include": ["src", "db", "tests", "vite.config.ts", "capacitor.config.ts"]

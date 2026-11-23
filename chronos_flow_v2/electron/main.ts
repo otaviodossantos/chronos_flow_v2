@@ -5,6 +5,7 @@ import {
 import { spawn, type ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import * as servidores from './servidores.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = !app.isPackaged;
@@ -22,12 +23,14 @@ let quitting = false;
  */
 function startServer() {
   if (isDev) return; // em dev, `npm run dev` ja cuida disso
+  if (serverProcess) return; // ja de pe
   const entry = path.join(__dirname, '..', 'dist-server', 'server', 'index.js');
   serverProcess = spawn(process.execPath, [entry], {
     env: { ...process.env, NODE_ENV: 'production', PORT: String(API_PORT) },
     stdio: 'inherit',
   });
   serverProcess.on('exit', (code) => {
+    serverProcess = null;
     if (!quitting) {
       console.error(`Servidor caiu (codigo ${code}). Reiniciando em 2s...`);
       setTimeout(startServer, 2000);
@@ -48,6 +51,63 @@ async function waitForApi(retries = 40): Promise<boolean> {
   return false;
 }
 
+/**
+ * Servidores. "Este computador" e o servidor embutido (no desenvolvimento, o
+ * Vite do `npm run dev`). Os outros sao os que a pessoa adicionou.
+ */
+const LOCAL: servidores.Servidor = {
+  nome: 'Este computador',
+  url: isDev ? 'http://localhost:5173' : `http://localhost:${API_PORT}`,
+  local: true,
+};
+
+function listaDeServidores(): servidores.Servidor[] {
+  return [LOCAL, ...servidores.ler().extras];
+}
+
+function servidorAtual(): servidores.Servidor | null {
+  const { atual } = servidores.ler();
+  return listaDeServidores().find((s) => s.url === atual) ?? null;
+}
+
+const mesmaOrigem = (a: string, b: string) => {
+  try {
+    return new URL(a).origin === new URL(b).origin;
+  } catch {
+    return false;
+  }
+};
+
+/** So http(s) e e-mail saem para o sistema: a pagina e de um servidor remoto. */
+function abrirFora(url: string) {
+  if (/^(https?:|mailto:)/i.test(url)) void shell.openExternal(url);
+}
+
+function mostrarSeletor() {
+  if (!mainWindow) return;
+  if (floatingWindow && !floatingWindow.isDestroyed()) floatingWindow.close();
+  void mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(servidores.paginaDoSeletor())}`);
+}
+
+async function abrirServidor(s: servidores.Servidor) {
+  if (!mainWindow) return;
+  // O servidor embutido so sobe quando e ele o escolhido: quem trabalha so
+  // num servidor remoto nao precisa de Postgres nesta maquina.
+  if (s.local && !isDev) {
+    startServer();
+    await waitForApi();
+  }
+  // A widget e da sessao do servidor anterior.
+  if (floatingWindow && !floatingWindow.isDestroyed()) floatingWindow.close();
+  await mainWindow.loadURL(s.url);
+}
+
+function iniciarNoServidor() {
+  const atual = servidorAtual();
+  if (atual) void abrirServidor(atual);
+  else mostrarSeletor();
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1440,
@@ -61,18 +121,16 @@ function createWindow() {
     trafficLightPosition: process.platform === 'darwin' ? { x: 19, y: 18 } : undefined,
     backgroundColor: '#0a0a0a',
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      // CommonJS (.cjs): o projeto e ESM, e preload ESM so carrega como .mjs.
+      // Como .js, a ponte simplesmente nao subia — window.chronos ficava vazio.
+      preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
     },
   });
 
-  if (isDev) {
-    mainWindow.loadURL('http://localhost:5173');
-  } else {
-    mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
-  }
+  iniciarNoServidor();
 
   mainWindow.once('ready-to-show', () => mainWindow?.show());
 
@@ -86,8 +144,17 @@ function createWindow() {
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    abrirFora(url);
     return { action: 'deny' };
+  });
+
+  // A janela fica no servidor escolhido: link para fora abre no navegador,
+  // nunca troca a tela do app por outro site.
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const atual = servidorAtual();
+    if (url.startsWith('data:') || (atual && mesmaOrigem(url, atual.url))) return;
+    event.preventDefault();
+    abrirFora(url);
   });
 }
 
@@ -113,6 +180,16 @@ function createTray() {
     Menu.buildFromTemplate([
       { label: 'Abrir Chronos Flow', click: toggleWindow },
       { label: 'Widget de foco', accelerator: 'Alt+Command+F', click: () => createFloatingWindow() },
+      {
+        label: 'Trocar servidor...',
+        click: () => {
+          if (!mainWindow) createWindow();
+          mostrarSeletor();
+          if (process.platform === 'darwin') app.dock?.show();
+          mainWindow?.show();
+          mainWindow?.focus();
+        },
+      },
       { type: 'separator' },
       {
         label: 'Iniciar com o sistema',
@@ -187,7 +264,7 @@ function createFloatingWindow(initialNode?: unknown): BrowserWindow | null {
       fullscreenable: false,
       type: process.platform === 'darwin' ? 'panel' : undefined,
       webPreferences: {
-        preload: path.join(__dirname, 'preload.js'),
+        preload: path.join(__dirname, 'preload.cjs'),
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: false,
@@ -197,14 +274,9 @@ function createFloatingWindow(initialNode?: unknown): BrowserWindow | null {
 
     applyFloatingAttributes(floatingWindow);
 
-    if (isDev) {
-      floatingWindow.loadURL('http://localhost:5173/?window=floating#floating');
-    } else {
-      floatingWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'), {
-        query: { window: 'floating' },
-        hash: 'floating',
-      });
-    }
+    // Mesmo servidor da janela principal: e de la que vem a sessao.
+    const base = servidorAtual()?.url ?? LOCAL.url;
+    void floatingWindow.loadURL(`${base}/?window=floating#floating`);
 
     floatingWindow.webContents.on('did-finish-load', () => {
       if (!floatingWindow || floatingWindow.isDestroyed()) return;
@@ -300,7 +372,51 @@ ipcMain.on('chronos:bounce-dock', (_e, { type }) => {
   if (process.platform === 'darwin') app.dock?.bounce(type ?? 'informational');
 });
 
-ipcMain.handle('chronos:open-external', (_e, url: string) => shell.openExternal(url));
+ipcMain.handle('chronos:open-external', (_e, url: string) => abrirFora(String(url)));
+
+/**
+ * Servidores. Consultar e pedir a troca vale de qualquer pagina (a tela de
+ * entrada mostra "Servidor: X · Trocar"). Escolher, adicionar e remover so
+ * vindo da tela de escolha: a pagina de um servidor remoto nao pode mandar o
+ * app para outro servidor por conta propria.
+ */
+const daTelaDeEscolha = (e: Electron.IpcMainInvokeEvent) =>
+  Boolean(e.senderFrame?.url.startsWith('data:text/html'));
+
+const SO_DA_ESCOLHA = 'Acao so da tela de escolha de servidor.';
+
+ipcMain.handle('chronos:servidor-atual', () => servidorAtual());
+ipcMain.handle('chronos:trocar-servidor', () => mostrarSeletor());
+ipcMain.handle('chronos:servidores', (e) => {
+  if (!daTelaDeEscolha(e)) throw new Error(SO_DA_ESCOLHA);
+  return { atual: servidores.ler().atual, lista: listaDeServidores() };
+});
+ipcMain.handle('chronos:escolher-servidor', async (e, url: string) => {
+  if (!daTelaDeEscolha(e)) throw new Error(SO_DA_ESCOLHA);
+  const alvo = listaDeServidores().find((s) => s.url === url);
+  if (!alvo) throw new Error('Servidor fora da lista.');
+  servidores.gravar({ ...servidores.ler(), atual: alvo.url });
+  await abrirServidor(alvo);
+});
+ipcMain.handle('chronos:adicionar-servidor', async (e, dados: { url: string; nome?: string }) => {
+  if (!daTelaDeEscolha(e)) throw new Error(SO_DA_ESCOLHA);
+  const url = servidores.normalizar(String(dados?.url ?? ''));
+  await servidores.conferir(url);
+  const nome = String(dados?.nome ?? '').trim().slice(0, 60) || new URL(url).hostname;
+  const g = servidores.ler();
+  const extras = g.extras.filter((s) => s.url !== url);
+  if (url !== LOCAL.url) extras.push({ nome, url });
+  servidores.gravar({ atual: url, extras });
+  await abrirServidor(listaDeServidores().find((s) => s.url === url) ?? LOCAL);
+});
+ipcMain.handle('chronos:remover-servidor', (e, url: string) => {
+  if (!daTelaDeEscolha(e)) throw new Error(SO_DA_ESCOLHA);
+  const g = servidores.ler();
+  servidores.gravar({
+    atual: g.atual === url ? null : g.atual,
+    extras: g.extras.filter((s) => s.url !== url),
+  });
+});
 
 /**
  * No macOS o microfone tem dois portoes, e so o primeiro estava sendo aberto.
@@ -359,9 +475,8 @@ app.whenReady().then(async () => {
     }`,
   );
 
-  startServer();
-  if (!isDev) await waitForApi();
-
+  // O servidor embutido sobe sob demanda: so quando "Este computador" e o
+  // escolhido (ver abrirServidor).
   createWindow();
   createTray();
 

@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   GanttChartSquare, Target, Inbox, Users, BarChart3, Settings, Moon, Sun, Plus,
-  PanelLeftClose, PanelLeftOpen,
+  PanelLeftClose, PanelLeftOpen, LogOut, ShieldCheck,
 } from 'lucide-react';
+import type { AuthEstado } from '@shared/types';
+import { AUTH_KEY, useSair } from '@/features/auth/AuthGate';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { isMacDesktop } from '@/lib/platform';
@@ -14,7 +16,7 @@ import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { NewSpaceProjectDialog, type NewKind } from '@/components/NewSpaceProjectDialog';
 
-export type Tab = 'timeline' | 'focus' | 'backlog' | 'team' | 'reports' | 'settings';
+export type Tab = 'timeline' | 'focus' | 'backlog' | 'team' | 'reports' | 'admin' | 'settings';
 
 const NAV: Array<{ id: Tab; label: string; icon: React.ReactNode }> = [
   // Timeline, Tabela e Kanban moram juntas aqui: o seletor fica no topo da tela.
@@ -45,6 +47,8 @@ export function Sidebar({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
   const mac = isMacDesktop();
 
   const { data: spaces = [] } = useQuery({ queryKey: ['spaces'], queryFn: api.spaces });
+  const { data: auth } = useQuery<AuthEstado>({ queryKey: AUTH_KEY, enabled: false });
+  const sair = useSair();
   const { data: focus } = useQuery({ queryKey: ['focus', 'today'], queryFn: () => api.focusQueue({ scope: 'today' }) });
 
   const largura = fechada ? (mac ? RAIL_MAC : RAIL) : ABERTA;
@@ -97,7 +101,13 @@ export function Sidebar({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
             Workspace
           </div>
         )}
-        {NAV.map((item) =>
+        {[
+          ...NAV,
+          // So quem administra o servidor ve a aba (o servidor confere de novo).
+          ...(auth?.usuario?.papel === 'ADMIN'
+            ? [{ id: 'admin' as Tab, label: 'Admin', icon: <ShieldCheck className="h-4 w-4" /> }]
+            : []),
+        ].map((item) =>
           comDica(
             <button
               key={item.id}
@@ -226,6 +236,28 @@ export function Sidebar({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
             {!fechada && 'Configuracoes'}
           </button>,
           'Configuracoes',
+        )}
+
+        {comDica(
+          <button
+            type="button"
+            onClick={() => sair.mutate()}
+            disabled={sair.isPending}
+            aria-label="Sair da conta"
+            title={auth?.usuario?.email ?? undefined}
+            className={cn(
+              'flex w-full items-center rounded-md text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
+              fechada ? 'justify-center py-2.5' : 'gap-2.5 px-2.5 py-2',
+            )}
+          >
+            <LogOut className="h-4 w-4" />
+            {!fechada && (
+              <span className="min-w-0 flex-1 truncate text-left">
+                Sair{auth?.usuario ? ` · ${auth.usuario.name}` : ''}
+              </span>
+            )}
+          </button>,
+          'Sair da conta',
         )}
 
         {comDica(

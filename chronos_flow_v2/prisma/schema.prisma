@@ -22,6 +22,12 @@ enum DependencyType {
   FINISH_TO_FINISH
 }
 
+/// ADMIN ve e gerencia todas as contas (e entra no espaco delas); MEMBRO so a propria.
+enum PapelUsuario {
+  ADMIN
+  MEMBRO
+}
+
 enum TrainingLevel {
   NOT_STARTED
   IN_TRAINING
@@ -29,25 +35,98 @@ enum TrainingLevel {
 }
 
 model User {
-  id                       String   @id @default(uuid())
+  id                       String       @id @default(uuid())
   name                     String
-  birth_date               DateTime @default("1990-01-01T00:00:00.000Z")
-  life_expectancy          Int      @default(75)
-  daily_focus_goal_minutes Int      @default(240)
-  daily_impact_goal        Decimal  @default(1.0) @db.Decimal(5, 2)
-  timezone                 String   @default("America/Sao_Paulo")
+  /// Login. Nulo so no usuario antigo de antes das contas, ate alguem
+  /// reivindica-lo no primeiro acesso.
+  email                    String?      @unique
+  /// scrypt (ver server/lib/senha.ts). Nunca sai do servidor nem vai no pacote.
+  password_hash            String?
+  /// A primeira conta do servidor nasce ADMIN; as outras, MEMBRO.
+  papel                    PapelUsuario @default(MEMBRO)
+  /// A conta 0: a primeira do servidor. E sempre ADMIN — ninguem tira o
+  /// papel, bloqueia ou apaga ela, nem ela mesma. So existe uma.
+  dono                     Boolean      @default(false)
+  /// Preenchido = conta bloqueada pelo admin: nao entra, e sessoes e tokens caem.
+  bloqueado_em             DateTime?
+  birth_date               DateTime     @default("1990-01-01T00:00:00.000Z")
+  life_expectancy          Int          @default(75)
+  daily_focus_goal_minutes Int          @default(240)
+  daily_impact_goal        Decimal      @default(1.0) @db.Decimal(5, 2)
+  timezone                 String       @default("America/Sao_Paulo")
   gemini_api_key           String?
-  gemini_model             String   @default("gemini-2.5-flash")
-  created_at               DateTime @default(now())
-  updated_at               DateTime @updatedAt
+  gemini_model             String       @default("gemini-2.5-flash")
+  created_at               DateTime     @default(now())
+  updated_at               DateTime     @updatedAt
 
-  spaces    Space[]
-  nodes     Node[]
-  members   Member[]
-  backlog   BacklogItem[]
-  templates TaskTemplate[]
+  spaces           Space[]
+  nodes            Node[]
+  members          Member[]
+  backlog          BacklogItem[]
+  templates        TaskTemplate[]
+  sessions         Session[]      @relation("SessaoDono")
+  sessoes_atuando  Session[]      @relation("SessaoAtuando")
+  api_tokens       ApiToken[]
+  convites_criados Convite[]      @relation("ConviteCriador")
+  convites_usados  Convite[]      @relation("ConviteUsado")
 
   @@map("users")
+}
+
+/// Sessao de navegador. Guarda so o hash do token que vai no cookie: quem ler
+/// o banco nao consegue se passar por ninguem.
+model Session {
+  id              String   @id @default(uuid())
+  user_id         String
+  user            User     @relation("SessaoDono", fields: [user_id], references: [id], onDelete: Cascade)
+  /// Admin "dentro do espaco" de outra conta: as requisicoes desta sessao leem
+  /// e escrevem como essa conta, e a atividade fica no nome do admin.
+  atuando_como_id String?
+  atuando_como    User?    @relation("SessaoAtuando", fields: [atuando_como_id], references: [id], onDelete: SetNull)
+  token_hash      String   @unique
+  user_agent      String?
+  created_at      DateTime @default(now())
+  last_seen_at    DateTime @default(now())
+  expires_at      DateTime
+
+  @@index([user_id])
+  @@map("sessions")
+}
+
+/// Token de API pessoal, para o MCP e scripts. Aparece uma vez na tela; aqui
+/// fica so o hash e o comeco, para a lista dizer qual e qual.
+model ApiToken {
+  id           String    @id @default(uuid())
+  user_id      String
+  user         User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  name         String
+  token_hash   String    @unique
+  prefix       String
+  created_at   DateTime  @default(now())
+  last_used_at DateTime?
+
+  @@index([user_id])
+  @@map("api_tokens")
+}
+
+/// Convite individual: um link para uma pessoa, de uso unico, com prazo. O
+/// banco guarda so o hash do token que vai no link.
+model Convite {
+  id            String    @id @default(uuid())
+  token_hash    String    @unique
+  /// Se preenchido, o cadastro so aceita este e-mail.
+  email         String?
+  criado_por_id String?
+  criado_por    User?     @relation("ConviteCriador", fields: [criado_por_id], references: [id], onDelete: SetNull)
+  criado_em     DateTime  @default(now())
+  expira_em     DateTime
+  usado_em      DateTime?
+  usado_por_id  String?
+  usado_por     User?     @relation("ConviteUsado", fields: [usado_por_id], references: [id], onDelete: SetNull)
+  revogado_em   DateTime?
+
+  @@index([criado_em])
+  @@map("convites")
 }
 
 model Space {
@@ -171,7 +250,7 @@ model Node {
   /// Despertador por tarefa, um recurso do iPhone. Sem tela no desktop: existe
   /// para os dois bancos terem as mesmas colunas, que e o que mantem a
   /// transferencia funcionando nos dois sentidos.
-  alarme      Boolean @default(false)
+  alarme Boolean @default(false)
 
   // Tempo
   start_date        DateTime?
@@ -194,8 +273,8 @@ model Node {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  blocks     NodeDependency[] @relation("Blocker")
-  blocked_by NodeDependency[] @relation("Blocked")
+  blocks     NodeDependency[]   @relation("Blocker")
+  blocked_by NodeDependency[]   @relation("Blocked")
   snapshots  ProgressSnapshot[]
   activity   NodeActivity[]
   updates    NodeUpdate[]
@@ -275,16 +354,16 @@ enum BacklogStatus {
 
 /// Coisas que ainda nao sao arvore: uma ideia, um evento a organizar, um pedido solto.
 model BacklogItem {
-  id          String        @id @default(uuid())
-  user_id     String
-  user        User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  space_id    String?
-  space       Space?        @relation(fields: [space_id], references: [id], onDelete: SetNull)
+  id       String  @id @default(uuid())
+  user_id  String
+  user     User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  space_id String?
+  space    Space?  @relation(fields: [space_id], references: [id], onDelete: SetNull)
 
-  title       String
-  notes       String?
-  status      BacklogStatus @default(INBOX)
-  position    Int           @default(0)
+  title    String
+  notes    String?
+  status   BacklogStatus @default(INBOX)
+  position Int           @default(0)
 
   /// Janela de execucao do projeto. E o que da sentido aos offsets que a IA
   /// propoe: sem inicio e fim, "daqui a 12 dias" nao ancora em nada.
@@ -295,7 +374,7 @@ model BacklogItem {
   /// Teto de tarefas que a IA pode propor, somando todos os niveis da arvore.
   /// Nulo = sem teto. O corte e aplicado no planner, e nao so pedido no prompt:
   /// um limite que o modelo pode ignorar nao e um limite.
-  max_tasks   Int?
+  max_tasks Int?
 
   /// Rascunho sugerido pela IA, ainda nao aplicado. Editavel antes de virar arvore.
   ai_plan       Json?
@@ -306,8 +385,8 @@ model BacklogItem {
   converted_node_id String?
 
   roles      BacklogRole[]
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
+  created_at DateTime      @default(now())
+  updated_at DateTime      @updatedAt
 
   @@index([user_id, status, position])
   @@map("backlog_items")
@@ -320,18 +399,18 @@ model BacklogRole {
   backlog_item_id String
   backlog_item    BacklogItem @relation(fields: [backlog_item_id], references: [id], onDelete: Cascade)
 
-  title           String
-  description     String?
+  title          String
+  description    String?
   /// Carga estimada por semana, para dimensionar a equipe.
-  hours_per_week  Int?
-  headcount       Int         @default(1)
-  position        Int         @default(0)
+  hours_per_week Int?
+  headcount      Int     @default(1)
+  position       Int     @default(0)
 
   /// Preenchido quando voce liga o papel a alguem da equipe.
-  member_id       String?
-  member          Member?     @relation(fields: [member_id], references: [id], onDelete: SetNull)
+  member_id String?
+  member    Member? @relation(fields: [member_id], references: [id], onDelete: SetNull)
 
-  created_at      DateTime    @default(now())
+  created_at DateTime @default(now())
 
   @@index([backlog_item_id, position])
   @@map("backlog_roles")

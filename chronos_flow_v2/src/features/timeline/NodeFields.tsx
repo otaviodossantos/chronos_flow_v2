@@ -15,15 +15,12 @@ import { Select } from '@/components/ui/select';
 import { DictationTextarea } from '@/components/DictationTextarea';
 
 /**
- * Tudo o que se define depois que a tarefa ja existe. Antes daqui, o painel
- * de detalhe so deixava mexer no agendamento: nome, responsavel, peso e
- * dependencias eram decididos na criacao e nunca mais.
- *
- * Os campos salvam sozinhos — select ao trocar, texto ao sair do campo. Um
- * botao "salvar" por campo transformaria cada ajuste em dois cliques.
+ * Campos da tarefa que salvam sozinhos — select ao trocar, texto ao sair do
+ * campo. Um botao "salvar" por campo transformaria cada ajuste em dois cliques.
+ * Quem monta o formulario e a gaveta da tarefa (`features/task/TaskSheet`).
  */
 
-function usePatch(nodeId: string, onSaved: () => void) {
+export function usePatch(nodeId: string, onSaved: () => void) {
   return useMutation({
     mutationFn: (body: Record<string, unknown>) => api.updateNode(nodeId, body),
     onSuccess: onSaved,
@@ -32,7 +29,7 @@ function usePatch(nodeId: string, onSaved: () => void) {
 }
 
 /** Campo de texto que so dispara ao sair, para nao salvar a cada tecla. */
-function TextOnBlur({
+export function TextOnBlur({
   value,
   onCommit,
   className,
@@ -69,12 +66,16 @@ function TextOnBlur({
  * Descricao com ditado. O rascunho fica local para o ditado poder anexar
  * texto sem uma ida ao servidor por palavra; o salvamento e ao sair do campo.
  */
-function DescriptionField({
+export function DescriptionField({
   value,
   onCommit,
+  label = 'Descricao',
+  className = 'min-h-[64px] text-xs',
 }: {
   value: string;
   onCommit: (v: string) => void;
+  label?: string;
+  className?: string;
 }) {
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value]);
@@ -82,165 +83,14 @@ function DescriptionField({
   return (
     <DictationTextarea
       value={draft}
-      label="Descricao"
+      label={label}
       placeholder="Escreva ou dite o contexto da tarefa..."
-      className="min-h-[64px] text-xs"
+      className={className}
       onChange={setDraft}
       onBlur={() => {
         if (draft !== value) onCommit(draft);
       }}
     />
-  );
-}
-
-export function NodeFields({
-  node,
-  hasChildren,
-  onSaved,
-}: {
-  node: NodeDTO;
-  hasChildren: boolean;
-  onSaved: () => void;
-}) {
-  const patch = usePatch(node.id, onSaved);
-  // Mesma regra do servidor, so que para explicar antes de acontecer.
-  const fimSegueEstimativa = !hasChildren && !node.all_day && Boolean(node.start_date);
-  const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: api.members });
-  const { data: spaces = [] } = useQuery({ queryKey: ['spaces'], queryFn: api.spaces });
-
-  return (
-    <section className="space-y-3 border-b p-4">
-      <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-        Detalhes
-      </div>
-
-      <div>
-        <Label className="mb-1 block text-[10px]">Titulo</Label>
-        <TextOnBlur
-          value={node.title}
-          className="h-8 text-sm"
-          aria-label="Titulo da tarefa"
-          onCommit={(title) => title && patch.mutate({ title })}
-        />
-      </div>
-
-      <div>
-        <DescriptionField
-          value={node.description ?? ''}
-          onCommit={(description) => patch.mutate({ description: description || null })}
-        />
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <Label className="mb-1 block text-[10px]">Responsavel</Label>
-          <Select
-            className="h-8 w-full"
-            aria-label="Responsavel"
-            value={node.assignee_id ?? ''}
-            onChange={(e) => patch.mutate({ assignee_id: e.target.value || null })}
-          >
-            <option value="">Nao atribuida</option>
-            {members.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <div>
-          <Label className="mb-1 block text-[10px]">Criticidade</Label>
-          <Select
-            className="h-8 w-full"
-            aria-label="Criticidade"
-            value={node.importance}
-            onChange={(e) => patch.mutate({ importance: Number(e.target.value) })}
-          >
-            <option value={5}>5 - Critico</option>
-            <option value={4}>4 - Alto</option>
-            <option value={3}>3 - Medio</option>
-            <option value={2}>2 - Baixo</option>
-            <option value={1}>1 - Minimo</option>
-          </Select>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <Label className="mb-1 block text-[10px]">Tempo estimado (min)</Label>
-          <TextOnBlur
-            type="number"
-            min={1}
-            aria-label="Tempo estimado em minutos"
-            className="h-8 text-xs"
-            value={node.estimated_minutes ? String(node.estimated_minutes) : ''}
-            onCommit={(v) =>
-              patch.mutate({ estimated_minutes: v ? Number(v) : null })
-            }
-          />
-        </div>
-        <div>
-          <Label className="mb-1 block text-[10px]">Peso na cascata</Label>
-          <TextOnBlur
-            type="number"
-            min={1}
-            aria-label="Peso na cascata"
-            className="h-8 text-xs"
-            value={String(node.weight)}
-            onCommit={(v) => v && patch.mutate({ weight: Number(v) })}
-          />
-        </div>
-      </div>
-
-      <p className="text-[10px] leading-relaxed text-muted-foreground">
-        {hasChildren
-          ? 'Mudar o peso reescreve a fatia desta tarefa entre as irmas e recalcula a meta macro.'
-          : 'Sem peso proprio, ele vem do tempo estimado. Mudar qualquer um dos dois muda a fatia desta tarefa na meta macro.'}
-      </p>
-
-      {fimSegueEstimativa ? (
-        <p className="rounded-md bg-secondary/60 p-2 text-[10px] leading-relaxed text-muted-foreground">
-          O termino acompanha a estimativa: mudar o tempo move o fim da barra na timeline. Hoje
-          termina as{' '}
-          <strong className="font-mono text-foreground">
-            {formatDateTime(node.due_date, false)}
-          </strong>
-          {node.estimated_minutes ? ` (${formatDuration(node.estimated_minutes)})` : ''}.
-        </p>
-      ) : (
-        <p className="text-[10px] leading-relaxed text-muted-foreground">
-          {hasChildren
-            ? 'A janela desta tarefa vem das filhas, entao o tempo estimado aqui nao move a barra.'
-            : node.all_day
-              ? 'Em tarefa de dia inteiro o termino e prazo, nao duracao: ele nao se mexe sozinho. Desligue "Dia inteiro" no agendamento para o fim acompanhar a estimativa.'
-              : 'Defina um inicio no agendamento para o termino passar a acompanhar a estimativa.'}
-        </p>
-      )}
-
-      <div>
-        <Label className="mb-1 block text-[10px]">Espaco</Label>
-        <Select
-          className="h-8 w-full"
-          aria-label="Espaco"
-          value={node.space_id ?? ''}
-          onChange={(e) => patch.mutate({ space_id: e.target.value || null })}
-        >
-          <option value="">Sem espaco</option>
-          {spaces.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </Select>
-        {/* Dito antes, e nao depois: mover um ramo inteiro de espaco sem aviso
-            seria uma surpresa de escala imprevisivel. */}
-        {hasChildren && (
-          <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
-            Trocar o espaco leva todas as subtarefas deste ramo junto.
-          </p>
-        )}
-      </div>
-    </section>
   );
 }
 

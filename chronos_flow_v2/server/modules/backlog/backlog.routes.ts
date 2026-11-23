@@ -17,7 +17,12 @@ import {
   type PlanTask,
 } from '../../../shared/schemas/index.js';
 
+import { donoDoParam, garantirDono } from '../../lib/dono.js';
+
 const router = Router();
+
+router.param('id', donoDoParam('backlogItem'));
+router.param('roleId', donoDoParam('backlogRole'));
 
 // Todo o modulo depende dos modelos novos do schema.
 router.use(requireModels('backlogItem', 'backlogRole'));
@@ -69,6 +74,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const userId = await currentUserId();
     const body = createBacklogSchema.parse(req.body);
+    await garantirDono('space', body.space_id);
     const last = await prisma.backlogItem.findFirst({
       where: { user_id: userId },
       orderBy: { position: 'desc' },
@@ -92,6 +98,7 @@ router.patch(
   '/:id',
   asyncHandler(async (req, res) => {
     const body = createBacklogSchema.partial().parse(req.body);
+    await garantirDono('space', body.space_id);
     const updated = await prisma.backlogItem.update({
       where: { id: req.params.id },
       data: {
@@ -172,6 +179,7 @@ router.patch(
   '/:id/plan',
   asyncHandler(async (req, res) => {
     const { plan } = savePlanSchema.parse(req.body);
+    await garantirDono('member', plan.roles.map((r) => r.member_id));
 
     const item = await prisma.backlogItem.findUnique({ where: { id: req.params.id } });
     if (!item) throw notFound('Item do backlog');
@@ -194,6 +202,10 @@ router.post(
   asyncHandler(async (req, res) => {
     const userId = await currentUserId();
     const body = applyPlanSchema.parse(req.body);
+    await Promise.all([
+      garantirDono('space', body.space_id),
+      garantirDono('member', body.plan.roles.map((r) => r.member_id)),
+    ]);
 
     const item = await prisma.backlogItem.findUnique({ where: { id: req.params.id } });
     if (!item) throw notFound('Item do backlog');
@@ -408,6 +420,7 @@ router.patch(
   '/roles/:roleId',
   asyncHandler(async (req, res) => {
     const memberId = (req.body?.member_id ?? null) as string | null;
+    await garantirDono('member', memberId);
     const updated = await prisma.backlogRole.update({
       where: { id: req.params.roleId },
       data: { member_id: memberId },

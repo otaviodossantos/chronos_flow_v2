@@ -20,6 +20,7 @@ const REQUIRED_MODELS = [
   'backlogRole',
   'taskTemplate',
   'nodeUpdate',
+  'convite',
 ] as const;
 
 export function hasModel(name: string): boolean {

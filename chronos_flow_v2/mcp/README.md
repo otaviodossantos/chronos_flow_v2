@@ -38,8 +38,11 @@ script, use `npm run -s mcp` (o `-s` silencia o npm).
 
 Claude Code:
 
+A API exige login, entao o MCP precisa de um **token de API**: crie em
+Configuracoes > Conta e acesso > Tokens de API (ele aparece uma vez so).
+
 ```bash
-claude mcp add chronos -- npx tsx /caminho/para/chronos_flow_v2/mcp/server.ts
+claude mcp add chronos -e CHRONOS_TOKEN=chr_... -- npx tsx /caminho/para/chronos_flow_v2/mcp/server.ts
 ```
 
 Claude Desktop e outros clientes com arquivo de configuracao:
@@ -49,7 +52,8 @@ Claude Desktop e outros clientes com arquivo de configuracao:
   "mcpServers": {
     "chronos": {
       "command": "npx",
-      "args": ["tsx", "/caminho/para/chronos_flow_v2/mcp/server.ts"]
+      "args": ["tsx", "/caminho/para/chronos_flow_v2/mcp/server.ts"],
+      "env": { "CHRONOS_TOKEN": "chr_..." }
     }
   }
 }
@@ -60,4 +64,4 @@ Claude Desktop e outros clientes com arquivo de configuracao:
 | Variavel | Padrao | Para que serve |
 | --- | --- | --- |
 | `CHRONOS_API` | `http://localhost:3101/api` | Endereco da API |
-| `CHRONOS_ACCESS_TOKEN` | vazio | So quando a API esta em outra maquina; mesmo valor do `.env` dela |
+| `CHRONOS_TOKEN` | vazio | Token de API da sua conta (obrigatorio). Os dados lidos e escritos sao os dessa conta |

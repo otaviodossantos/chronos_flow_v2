@@ -12,7 +12,11 @@ import {
 import { toTemplateDTO } from '../../lib/serialize.js';
 import * as nodes from '../nodes/nodes.service.js';
 
+import { donoDoParam, garantirDono } from '../../lib/dono.js';
+
 const router = Router();
+
+router.param('id', donoDoParam('template'));
 
 router.use(requireModels('taskTemplate'));
 
@@ -41,6 +45,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const userId = await currentUserId();
     const body = createTemplateSchema.parse(req.body);
+    await Promise.all([garantirDono('space', body.space_id), garantirDono('member', body.assignee_id)]);
 
     const space = await prisma.space.findFirst({
       where: { id: body.space_id, user_id: userId },
@@ -72,6 +77,7 @@ router.patch(
   asyncHandler(async (req, res) => {
     const userId = await currentUserId();
     const body = createTemplateSchema.partial().parse(req.body);
+    await Promise.all([garantirDono('space', body.space_id), garantirDono('member', body.assignee_id)]);
 
     const existing = await prisma.taskTemplate.findFirst({
       where: { id: req.params.id, user_id: userId },
@@ -112,6 +118,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const userId = await currentUserId();
     const body = instantiateTemplateSchema.parse(req.body);
+    await garantirDono('node', body.parent_id);
 
     const template = await prisma.taskTemplate.findFirst({
       where: { id: req.params.id, user_id: userId },

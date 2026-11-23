@@ -50,7 +50,8 @@ export const PAN_MINUTES: Record<ZoomLevel, number> = {
 
 export const ROW_HEIGHT = 40;
 
-export type DetailTab = 'details' | 'updates';
+/** Abas da gaveta da tarefa. Atualizacoes por padrao, como no Monday. */
+export type DetailTab = 'updates' | 'subtarefas' | 'dependencias' | 'atividade';
 
 interface TimelineState {
   zoom: ZoomLevel;
@@ -86,7 +87,12 @@ interface TimelineState {
    */
   draggingTemplateId: string | null;
 
-  setZoom: (zoom: ZoomLevel) => void;
+  /**
+   * Troca o zoom mantendo `ancora.centro` no meio da area visivel (de
+   * `ancora.largura` pixels). Sem ancora, abre na janela padrao em volta de
+   * hoje (`startFor`).
+   */
+  setZoom: (zoom: ZoomLevel, ancora?: { centro: Date; largura: number }) => void;
   panMinutes: (minutes: number) => void;
   setViewportStart: (d: Date) => void;
   goToNow: () => void;
@@ -107,6 +113,8 @@ interface TimelineState {
   setConclusao: (filtro: ConclusaoFiltro) => void;
   togglePalette: () => void;
   setDraggingTemplate: (id: string | null) => void;
+  /** Esquece selecao e filtros: ao trocar de conta eles apontariam para dados de outra pessoa. */
+  esquecerConta: () => void;
 }
 
 /**
@@ -131,13 +139,13 @@ function startFor(zoom: ZoomLevel, around = new Date()): Date {
   return d;
 }
 
-export const useTimelineStore = create<TimelineState>((set, get) => ({
+export const useTimelineStore = create<TimelineState>((set) => ({
   zoom: 'months',
   viewportStart: startFor('months'),
   overrides: new Map<string, boolean>(),
   maxDepth: 2,
   selectedId: null,
-  detailTab: 'details',
+  detailTab: 'updates',
   spaceId: null,
   assigneeId: null,
   statusFilter: [],
@@ -148,10 +156,31 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
   paletteOpen: false,
   draggingTemplateId: null,
 
-  // Troca de zoom preserva o centro da janela: o olho nao perde o lugar.
-  setZoom: (zoom) => {
-    const { viewportStart } = get();
-    set({ zoom, viewportStart: startFor(zoom, viewportStart) });
+  /**
+   * Troca de zoom preserva o que estava no meio da tela: o olho nao perde o
+   * lugar. Antes a ancora era a borda esquerda, e cada troca ainda recuava
+   * alguns dias (o "um pouco antes de hoje" de `startFor`): Trimestres ->
+   * Meses -> Semanas ia escorregando para o passado ate a tela ficar vazia.
+   *
+   * Quem chama zera a rolagem horizontal: a janela nova ja comeca onde o
+   * centro precisa estar.
+   */
+  setZoom: (zoom, ancora) => {
+    const centro = ancora?.centro ?? new Date();
+    // O zoom de horas tem regra propria: abre no comeco do dia (ver startFor).
+    if (zoom === 'hours') {
+      set({ zoom, viewportStart: startFor('hours', centro) });
+      return;
+    }
+    if (!ancora || ancora.largura <= 0) {
+      set({ zoom, viewportStart: startFor(zoom, centro) });
+      return;
+    }
+    // Sem arredondar para a meia-noite: arredondar sempre para baixo perdia ate
+    // um dia por troca, o mesmo escorregao em miniatura. A regua posiciona as
+    // marcas pelas datas reais, e a grade do canvas acompanha as marcas.
+    const metadeEmDias = ancora.largura / 2 / PX_PER_DAY[zoom];
+    set({ zoom, viewportStart: new Date(centro.getTime() - metadeEmDias * 86_400_000) });
   },
   panMinutes: (minutes) =>
     set((s) => ({ viewportStart: new Date(s.viewportStart.getTime() + minutes * 60_000) })),
@@ -176,7 +205,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
   // senao o botao pareceria nao fazer efeito nos nos ja tocados a mao.
   setMaxDepth: (maxDepth) => set({ maxDepth, overrides: new Map<string, boolean>() }),
   select: (selectedId) => set({ selectedId }),
-  openNode: (selectedId, detailTab = 'details') => set({ selectedId, detailTab }),
+  openNode: (selectedId, detailTab = 'updates') => set({ selectedId, detailTab }),
   setDetailTab: (detailTab) => set({ detailTab }),
   setSpace: (spaceId) => set({ spaceId }),
   setAssignee: (assigneeId) => set({ assigneeId }),
@@ -194,4 +223,15 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
   setConclusao: (conclusao) => set({ conclusao }),
   togglePalette: () => set((s) => ({ paletteOpen: !s.paletteOpen })),
   setDraggingTemplate: (draggingTemplateId) => set({ draggingTemplateId }),
+  esquecerConta: () =>
+    set({
+      selectedId: null,
+      detailTab: 'updates',
+      spaceId: null,
+      assigneeId: null,
+      statusFilter: [],
+      search: '',
+      overrides: new Map<string, boolean>(),
+      draggingTemplateId: null,
+    }),
 }));

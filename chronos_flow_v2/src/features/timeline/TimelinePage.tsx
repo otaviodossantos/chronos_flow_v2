@@ -5,7 +5,6 @@ import {
   CircleDashed, History,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import type { NodeDTO } from '@shared/types';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -18,7 +17,6 @@ import { useVisibleNodes } from './useVisibleNodes';
 import { TreePane } from './TreePane';
 import { TimeCanvas } from './TimeCanvas';
 import { TimeRuler } from './TimeRuler';
-import { DetailPane } from './DetailPane';
 import { NewSpaceProjectDialog } from '@/components/NewSpaceProjectDialog';
 import { TemplatePalette } from './TemplatePalette';
 import { useTreeDrag } from './useTreeDrag';
@@ -26,11 +24,7 @@ import { ViewSwitcher } from '@/features/board/BoardToolbar';
 
 const ZOOMS: ZoomLevel[] = ['quarters', 'months', 'weeks', 'days', 'hours'];
 
-export function TimelinePage({
-  onOpenWidget,
-}: {
-  onOpenWidget: (node?: NodeDTO | null) => void;
-}) {
+export function TimelinePage() {
   const store = useTimelineStore();
   const queryClient = useQueryClient();
   const treeScrollRef = useRef<HTMLDivElement>(null);
@@ -40,6 +34,40 @@ export function TimelinePage({
   const [newProject, setNewProject] = useState(false);
 
   const scale = useTimeScale(store.zoom, store.viewportStart);
+
+  /**
+   * A rolagem horizontal do canvas e de quem chama: a janela nova (zoom ou
+   * "Hoje") ja comeca onde precisa, entao a rolagem volta a zero. Deixa-la
+   * onde estava apontava, na escala nova, para outra data.
+   */
+  const zerarRolagem = () => {
+    if (canvasScrollRef.current) canvasScrollRef.current.scrollLeft = 0;
+    setScrollLeft(0);
+  };
+
+  /**
+   * Com "hoje" a vista, o zoom continua mostrando hoje (com a folga de sempre
+   * a esquerda): e o que se espera ao aproximar ou afastar. Se a pessoa
+   * navegou para outro periodo, preserva o que estava no meio da tela —
+   * preservar o meio sempre levaria, por exemplo, de Meses (hoje perto da
+   * borda esquerda) para Semanas meses a frente, com hoje fora da tela.
+   */
+  const trocarZoom = (z: ZoomLevel) => {
+    const el = canvasScrollRef.current;
+    const largura = el?.clientWidth ?? 0;
+    const rolagem = el?.scrollLeft ?? 0;
+    const hojeAVista = scale.todayX >= rolagem && scale.todayX <= rolagem + largura;
+    store.setZoom(
+      z,
+      el && !hojeAVista ? { centro: scale.dateAt(rolagem + largura / 2), largura } : undefined,
+    );
+    zerarRolagem();
+  };
+
+  const irParaHoje = () => {
+    store.goToNow();
+    zerarRolagem();
+  };
 
   const { data: nodes = [], isLoading } = useQuery({
     queryKey: [
@@ -163,7 +191,7 @@ export function TimelinePage({
             <button
               key={z}
               type="button"
-              onClick={() => store.setZoom(z)}
+              onClick={() => trocarZoom(z)}
               className={cn(
                 'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
                 store.zoom === z
@@ -185,7 +213,7 @@ export function TimelinePage({
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="xs" onClick={store.goToNow}>
+          <Button variant="ghost" size="xs" onClick={irParaHoje}>
             Hoje
           </Button>
           <Button
@@ -399,9 +427,6 @@ export function TimelinePage({
           </footer>
         </div>
 
-        {store.selectedId && (
-          <DetailPane nodeId={store.selectedId} onOpenWidget={onOpenWidget} />
-        )}
       </div>
 
       <NewSpaceProjectDialog

@@ -4,8 +4,12 @@
  */
 const API = process.env.CHRONOS_API ?? 'http://localhost:3101/api';
 
-/** Necessario so quando a API esta em outra maquina (ver server/lib/acesso.ts). */
-const TOKEN = (process.env.CHRONOS_ACCESS_TOKEN ?? '').trim();
+/**
+ * Token de API pessoal, criado em Configuracoes > Conta e acesso. A API exige
+ * login em todas as rotas, e o token diz de qual conta sao os dados que o
+ * agente le e escreve.
+ */
+const TOKEN = (process.env.CHRONOS_TOKEN ?? '').trim();
 
 /** Versoes do protocolo que este servidor entende; a primeira e a preferida. */
 const PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
@@ -17,16 +21,39 @@ interface Tool {
   run: (args: Record<string, any>) => Promise<unknown>;
 }
 
+/**
+ * Um id vira um pedaco de URL, codificado. Os argumentos vem do modelo, e um
+ * "id" como `../ai/settings` mudaria a rota chamada.
+ */
+const seg = (valor: unknown) => encodeURIComponent(String(valor ?? ''));
+
+const CAMPOS_DO_NO = [
+  'title',
+  'description',
+  'assignee_id',
+  'start_date',
+  'due_date',
+  'estimated_minutes',
+  'importance',
+];
+
 async function call(path: string, init?: RequestInit) {
   const res = await fetch(`${API}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
-      ...(TOKEN ? { 'x-chronos-token': TOKEN } : {}),
+      ...(TOKEN ? { Authorization: `Bearer ${TOKEN}` } : {}),
       ...(init?.headers ?? {}),
     },
   });
   const body = await res.json().catch(() => null);
+  if (res.status === 401) {
+    throw new Error(
+      TOKEN
+        ? 'O token do Chronos foi recusado (revogado?). Gere outro em Configuracoes > Conta e acesso.'
+        : 'Falta o token do Chronos: crie um em Configuracoes > Conta e acesso e passe em CHRONOS_TOKEN.',
+    );
+  }
   if (!res.ok) throw new Error(body?.error?.message ?? `HTTP ${res.status}`);
   return body;
 }
@@ -53,7 +80,7 @@ export const tools: Tool[] = [
       'Um no com ancestrais, filhas, dependencias e atividade recente. ' +
       '`updates_count` diz quantas atualizacoes ele tem (leia com list_updates).',
     inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
-    run: (args) => call(`/nodes/${args.id}`),
+    run: (args) => call(`/nodes/${seg(args.id)}`),
   },
   {
     name: 'create_node',
@@ -99,7 +126,7 @@ export const tools: Tool[] = [
       required: ['id', 'children'],
     },
     run: (args) =>
-      call(`/nodes/${args.id}/breakdown`, {
+      call(`/nodes/${seg(args.id)}/breakdown`, {
         method: 'POST',
         body: JSON.stringify({ children: args.children }),
       }),
@@ -109,7 +136,7 @@ export const tools: Tool[] = [
     description:
       'Conclui uma tarefa folha e devolve a cascata: quanto cada ancestral subiu e o que foi destravado.',
     inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
-    run: (args) => call(`/nodes/${args.id}/complete`, { method: 'POST' }),
+    run: (args) => call(`/nodes/${seg(args.id)}/complete`, { method: 'POST' }),
   },
   {
     name: 'get_focus_queue',
@@ -144,7 +171,7 @@ export const tools: Tool[] = [
       required: ['id', 'assignee_id'],
     },
     run: async (args) => {
-      const node = await call(`/nodes/${args.id}`, {
+      const node = await call(`/nodes/${seg(args.id)}`, {
         method: 'PATCH',
         body: JSON.stringify({ assignee_id: args.assignee_id }),
       });
@@ -191,8 +218,13 @@ export const tools: Tool[] = [
       },
       required: ['id'],
     },
-    run: ({ id, ...body }) =>
-      call(`/nodes/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+    run: ({ id, ...resto }) => {
+      // So os campos do schema: o modelo nao pode mandar campo inventado.
+      const body = Object.fromEntries(
+        Object.entries(resto).filter(([k]) => CAMPOS_DO_NO.includes(k)),
+      );
+      return call(`/nodes/${seg(id)}`, { method: 'PATCH', body: JSON.stringify(body) });
+    },
   },
   {
     name: 'set_status',
@@ -209,7 +241,7 @@ export const tools: Tool[] = [
       required: ['id', 'status'],
     },
     run: (args) =>
-      call(`/nodes/${args.id}/status`, {
+      call(`/nodes/${seg(args.id)}/status`, {
         method: 'POST',
         body: JSON.stringify({ status: args.status }),
       }),
@@ -261,7 +293,7 @@ export const tools: Tool[] = [
       required: ['id', 'body'],
     },
     run: (args) =>
-      call(`/updates/${args.id}`, { method: 'PATCH', body: JSON.stringify({ body: args.body }) }),
+      call(`/updates/${seg(args.id)}`, { method: 'PATCH', body: JSON.stringify({ body: args.body }) }),
   },
 ];
 

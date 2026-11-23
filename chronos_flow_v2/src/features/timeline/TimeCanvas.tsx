@@ -76,8 +76,16 @@ export function TimeCanvas({
     [rows],
   );
 
+  /**
+   * O navegador dispara um clique ao soltar a barra, e o clique abre a gaveta
+   * da tarefa por cima da tela. Depois de um arraste de verdade (a barra
+   * andou), esse clique e engolido: ajustar datas nao deve abrir nada.
+   */
+  const arrastou = useRef(false);
+
   const startDrag = useCallback(
     (e: React.PointerEvent, node: NodeDTO, mode: 'move' | 'resize-start' | 'resize-end') => {
+      arrastou.current = false;
       e.stopPropagation();
       e.preventDefault();
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -115,6 +123,7 @@ export function TimeCanvas({
         }
       }
 
+      if (deltaMinutes !== 0) arrastou.current = true;
       if (deltaMinutes !== drag.deltaMinutes) setDrag({ ...drag, deltaMinutes });
     },
     [drag, rows, scale.pxPerMinute, scale.zoom],
@@ -177,6 +186,10 @@ export function TimeCanvas({
           width: scale.width,
           height: Math.max(rows.length * ROW_HEIGHT, 200),
           backgroundSize: `${gridSize}px 100%`,
+          // A grade comeca na primeira marca da regua, e nao no pixel zero: a
+          // janela nem sempre abre a meia-noite (o zoom preserva o centro), e
+          // sem isso as linhas ficariam deslocadas das etiquetas.
+          backgroundPosition: `${scale.ticks.length ? ((scale.ticks[0].x % gridSize) + gridSize) % gridSize : 0}px 0`,
         }}
       >
         {/* Zoom de horas: faixa alternada por dia, senao a grade vira um borrao */}
@@ -353,7 +366,13 @@ export function TimeCanvas({
                 tabIndex={0}
                 data-node-id={node.id}
                 onPointerDown={(e) => startDrag(e, node, 'move')}
-                onClick={() => select(node.id)}
+                onClick={() => {
+                  if (arrastou.current) {
+                    arrastou.current = false;
+                    return;
+                  }
+                  select(node.id);
+                }}
                 onKeyDown={(e) => e.key === 'Enter' && select(node.id)}
                 className={cn(
                   'group relative h-full cursor-grab overflow-hidden rounded-md border transition-shadow active:cursor-grabbing',

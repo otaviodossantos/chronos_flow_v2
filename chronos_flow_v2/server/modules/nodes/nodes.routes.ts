@@ -11,8 +11,21 @@ import {
   treeQuerySchema,
 } from '../../../shared/schemas/index.js';
 import * as service from './nodes.service.js';
+import { donoDoParam, garantirDono } from '../../lib/dono.js';
 
 const router = Router();
+
+// Toda rota com :id so segue se o no for da conta logada.
+router.param('id', donoDoParam('node'));
+
+/** Os ids que viram vinculo tambem tem de ser da conta. */
+async function vinculos(b: { parent_id?: string | null; space_id?: string | null; assignee_id?: string | null }) {
+  await Promise.all([
+    garantirDono('node', b.parent_id),
+    garantirDono('space', b.space_id),
+    garantirDono('member', b.assignee_id),
+  ]);
+}
 
 router.get(
   '/tree',
@@ -40,7 +53,9 @@ router.post(
   '/',
   asyncHandler(async (req, res) => {
     const userId = await currentUserId();
-    res.status(201).json(await service.createNode(userId, createNodeSchema.parse(req.body)));
+    const body = createNodeSchema.parse(req.body);
+    await vinculos(body);
+    res.status(201).json(await service.createNode(userId, body));
   }),
 );
 
@@ -48,7 +63,9 @@ router.patch(
   '/:id',
   asyncHandler(async (req, res) => {
     const userId = await currentUserId();
-    res.json(await service.updateNode(userId, req.params.id, updateNodeSchema.parse(req.body)));
+    const body = updateNodeSchema.parse(req.body);
+    await vinculos({ space_id: body.space_id, assignee_id: body.assignee_id });
+    res.json(await service.updateNode(userId, req.params.id, body));
   }),
 );
 
@@ -64,7 +81,9 @@ router.post(
   '/:id/breakdown',
   asyncHandler(async (req, res) => {
     const userId = await currentUserId();
-    res.json(await service.breakdown(userId, req.params.id, breakdownSchema.parse(req.body)));
+    const body = breakdownSchema.parse(req.body);
+    await garantirDono('member', body.children.map((c) => c.assignee_id));
+    res.json(await service.breakdown(userId, req.params.id, body));
   }),
 );
 
@@ -73,6 +92,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const userId = await currentUserId();
     const body = moveNodeSchema.parse(req.body);
+    await garantirDono('node', body.parent_id);
     res.json(await service.moveNode(userId, req.params.id, body.parent_id, body.position));
   }),
 );

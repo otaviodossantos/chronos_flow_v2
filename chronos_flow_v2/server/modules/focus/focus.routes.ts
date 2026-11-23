@@ -6,6 +6,7 @@ import { num, toNodeDTO } from '../../lib/serialize.js';
 import { focusScore, rootCriticality, projectProgress, startOfDay } from '../../domain/impact.js';
 import { blockedNodeIds } from '../../domain/dependencies.js';
 import { simulateSchema } from '../../../shared/schemas/index.js';
+import { garantirDono } from '../../lib/dono.js';
 import type { FocusItem } from '../../../shared/types.js';
 
 const router = Router();
@@ -140,6 +141,7 @@ router.post(
   '/simulate',
   asyncHandler(async (req, res) => {
     const { nodeIds } = simulateSchema.parse(req.body);
+    await garantirDono('node', nodeIds);
     const nodes = await prisma.node.findMany({
       where: { id: { in: nodeIds } },
       select: { id: true, path: true, root_impact: true, progress: true, title: true },
@@ -172,6 +174,32 @@ router.post(
           projected: projectProgress(current, leaves),
         };
       }),
+    });
+  }),
+);
+
+/**
+ * O que ja fechou hoje, para o widget do iPhone. `desde` e a meia-noite do
+ * aparelho: o servidor pode estar em outro fuso, e "hoje" e o de quem olha.
+ */
+router.get(
+  '/hoje',
+  asyncHandler(async (req, res) => {
+    const userId = await currentUserId();
+    const desde = new Date(String(req.query.desde ?? ''));
+    const inicio = Number.isNaN(desde.getTime()) ? startOfDay(new Date()) : desde;
+    const [fechadas, perfil] = await Promise.all([
+      prisma.node.findMany({
+        where: { user_id: userId, completed_at: { gte: inicio }, children: { none: {} } },
+        select: { estimated_minutes: true, root_impact: true },
+      }),
+      prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { daily_focus_goal_minutes: true } }),
+    ]);
+    res.json({
+      concluidasHoje: fechadas.length,
+      minutosFocados: fechadas.reduce((s, f) => s + (f.estimated_minutes ?? 0), 0),
+      metaDeMinutos: perfil.daily_focus_goal_minutes,
+      impactoDoDia: Math.round(fechadas.reduce((s, f) => s + num(f.root_impact), 0) * 100) / 100,
     });
   }),
 );

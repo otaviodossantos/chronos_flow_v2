@@ -332,3 +332,50 @@ export const setStatusSchema = z.object({
   status: z.enum(['PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED']),
 });
 export type SetStatusInput = z.infer<typeof setStatusSchema>;
+
+/* ── Contas ─────────────────────────────────────────────────────────────── */
+
+const email = z.string().trim().toLowerCase().email('e-mail invalido').max(200);
+const senha = z.string().min(8, 'a senha precisa de pelo menos 8 caracteres').max(200);
+
+export const cadastroSchema = z.object({
+  nome: z.string().trim().min(1, 'nome obrigatorio').max(120),
+  email,
+  senha,
+  /** Exigido quando o servidor define CHRONOS_CONVITE. */
+  convite: z.string().max(200).optional(),
+  /** App do celular: a sessao volta no corpo (`tokenDoApp`), nao em cookie. */
+  app: z.boolean().optional(),
+});
+
+export const entrarSchema = z.object({
+  email,
+  senha: z.string().min(1).max(200),
+  app: z.boolean().optional(),
+});
+
+export const trocarSenhaSchema = z.object({
+  atual: z.string().min(1).max(200),
+  nova: senha,
+});
+
+export const criarTokenSchema = z.object({
+  nome: z.string().trim().min(1, 'de um nome ao token').max(80),
+});
+
+/* ── Administracao ──────────────────────────────────────────────────────── */
+
+export const criarConviteSchema = z.object({
+  /** Se informado, o cadastro por este convite so aceita este e-mail. */
+  email: z.string().trim().toLowerCase().email('e-mail invalido').max(200).optional().or(z.literal('').transform(() => undefined)),
+  dias: z.number().int().min(1).max(30).optional(),
+});
+
+export const atualizarUsuarioSchema = z.object({
+  papel: z.enum(['ADMIN', 'MEMBRO']).optional(),
+  bloqueado: z.boolean().optional(),
+});
+
+export const atuarComoSchema = z.object({
+  userId: z.string().uuid(),
+});

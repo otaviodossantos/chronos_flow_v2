@@ -6,11 +6,14 @@ import { Sidebar, type Tab } from '@/components/Sidebar';
 import { TimelinePage } from '@/features/timeline/TimelinePage';
 import { TableView } from '@/features/board/TableView';
 import { KanbanView } from '@/features/board/KanbanView';
+import { TaskSheet } from '@/features/task/TaskSheet';
 import { FocusPage } from '@/features/focus/FocusPage';
 import { BacklogPage } from '@/features/backlog/BacklogPage';
 import { TeamPage } from '@/features/team/TeamPage';
 import { ReportsPage } from '@/features/reports/ReportsPage';
 import { SettingsPage } from '@/features/settings/SettingsPage';
+import { AdminPage } from '@/features/admin/AdminPage';
+import { FaixaDeOutraConta } from '@/features/admin/FaixaDeOutraConta';
 import { FloatingTimerWidget } from '@/features/focus/FloatingTimerWidget';
 import {
   useFloatingWidget,
@@ -20,6 +23,7 @@ import { isFloatingWindow } from '@/lib/floatingWindow';
 import { useTimelineStore } from '@/stores/timelineStore';
 import { useThemeStore } from '@/stores/themeStore';
 import { useUiStore } from '@/stores/uiStore';
+import { AuthGate } from '@/features/auth/AuthGate';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -52,18 +56,21 @@ function Shell() {
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground antialiased">
       <Toaster richColors position="top-right" theme={theme} />
+      <FaixaDeOutraConta onVoltou={() => setTab('admin')} />
 
       <div className="flex min-h-0 flex-1">
         <Sidebar tab={tab} onTab={setTab} />
         <main className="min-w-0 flex-1">
           {/* Uma tela de projetos, tres jeitos de ver a mesma arvore. */}
           {tab === 'timeline' && projectView === 'timeline' && (
-            <TimelinePage onOpenWidget={floating.open} />
+            <TimelinePage />
           )}
-          {tab === 'timeline' && projectView === 'table' && <TableView onOpenWidget={floating.open} />}
+          {tab === 'timeline' && projectView === 'table' && <TableView />}
           {tab === 'timeline' && projectView === 'kanban' && (
-            <KanbanView onOpenWidget={floating.open} />
+            <KanbanView />
           )}
+          {/* A mesma gaveta para as tres visoes: segue a tarefa selecionada. */}
+          {tab === 'timeline' && <TaskSheet onOpenWidget={floating.open} />}
           {tab === 'focus' && (
             <FocusPage onNavigateToTimeline={() => setTab('timeline')} onOpenWidget={floating.open} />
           )}
@@ -77,6 +84,7 @@ function Shell() {
           )}
           {tab === 'team' && <TeamPage />}
           {tab === 'reports' && <ReportsPage />}
+          {tab === 'admin' && <AdminPage onEntrouNoEspaco={() => setTab('timeline')} />}
           {tab === 'settings' && <SettingsPage />}
         </main>
       </div>
@@ -99,7 +107,9 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider delayDuration={200}>
-        <Shell />
+        <AuthGate>
+          <Shell />
+        </AuthGate>
       </TooltipProvider>
     </QueryClientProvider>
   );

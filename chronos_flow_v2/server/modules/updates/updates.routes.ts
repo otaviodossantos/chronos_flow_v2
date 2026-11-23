@@ -5,6 +5,7 @@ import { currentUserId } from '../../lib/currentUser.js';
 import { notFound } from '../../lib/errors.js';
 import { toNodeUpdateDTO } from '../../lib/serialize.js';
 import { requireModels } from '../../lib/schemaGuard.js';
+import { assinaturaDoAdmin } from '../../lib/sessao.js';
 import {
   createNodeUpdateSchema,
   editNodeUpdateSchema,
@@ -62,7 +63,9 @@ router.post(
 
     // Sem autor explicito, assina com o nome do perfil — e o que a tela mostra
     // para quem esta usando o app.
+    // Admin no espaco de outra conta assina como ele mesmo, nunca como a pessoa.
     const author =
+      assinaturaDoAdmin() ??
       body.author ??
       (await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { name: true } }))
         .name;

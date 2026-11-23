@@ -173,6 +173,64 @@ export interface LifeSummary {
   };
 }
 
+/** O que a tela de entrada precisa saber antes de mostrar o formulario. */
+export type PapelUsuario = 'ADMIN' | 'MEMBRO';
+
+export interface AuthEstado {
+  autenticado: boolean;
+  /** A pessoa logada (o admin, quando ele esta no espaco de outra conta). */
+  usuario: { id: string; name: string; email: string | null; papel: PapelUsuario; dono: boolean } | null;
+  /** Admin agindo no espaco de outra conta: de quem sao os dados na tela. */
+  atuandoComo: { id: string; name: string; email: string | null } | null;
+  /** So na resposta de entrar/cadastrar pelo app: o token da sessao do aparelho. */
+  tokenDoApp?: string;
+  /** Nenhuma conta tem senha ainda: o proximo cadastro vira o dono dos dados existentes. */
+  primeiroAcesso: boolean;
+  /** O servidor so aceita cadastro com o codigo de convite (CHRONOS_CONVITE). */
+  conviteExigido: boolean;
+  /** Da para criar conta agora, daqui (primeiro acesso local, ou convite configurado). */
+  cadastroAberto: boolean;
+  /** Por que nao da para criar a primeira conta daqui, quando for o caso. */
+  avisoCadastro: string | null;
+}
+
+/** Linha da tela de Admin > Usuarios. */
+export interface AdminUsuarioDTO {
+  id: string;
+  name: string;
+  email: string | null;
+  papel: PapelUsuario;
+  /** A conta 0: sempre admin, nunca bloqueada nem apagada. */
+  dono: boolean;
+  bloqueado_em: string | null;
+  created_at: string;
+  ultimo_acesso: string | null;
+  espacos: Array<{ id: string; name: string; color: string }>;
+  metas: number;
+  tarefas: number;
+  tarefas_abertas: number;
+}
+
+export interface ConviteDTO {
+  id: string;
+  email: string | null;
+  criado_em: string;
+  expira_em: string;
+  criado_por: string | null;
+  usado_em: string | null;
+  usado_por: { name: string; email: string | null } | null;
+  revogado_em: string | null;
+  estado: 'pendente' | 'usado' | 'expirado' | 'revogado';
+}
+
+export interface ApiTokenDTO {
+  id: string;
+  name: string;
+  prefix: string;
+  created_at: string;
+  last_used_at: string | null;
+}
+
 export interface ApiError {
   error: { code: string; message: string; details?: unknown };
 }

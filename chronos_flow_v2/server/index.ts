@@ -7,8 +7,9 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { ZodError } from 'zod';
 import { AppError } from './lib/errors.js';
-import { exigeAcesso, enderecosDaRede } from './lib/acesso.js';
-import { currentUserId } from './lib/currentUser.js';
+import { enderecosDaRede } from './lib/rede.js';
+import { abrirContexto, exigeLogin } from './lib/sessao.js';
+import { prisma } from './db/client.js';
 import { missingModels } from './lib/schemaGuard.js';
 import { recomputeAll } from './modules/nodes/cascade.service.js';
 import nodeRoutes from './modules/nodes/nodes.routes.js';
@@ -23,6 +24,8 @@ import backlogRoutes from './modules/backlog/backlog.routes.js';
 import templateRoutes from './modules/templates/templates.routes.js';
 import aiRoutes from './modules/ai/ai.routes.js';
 import updateRoutes from './modules/updates/updates.routes.js';
+import authRoutes from './modules/auth/auth.routes.js';
+import adminRoutes from './modules/admin/admin.routes.js';
 import transferRoutes, { nomeDesteComputador } from './modules/transfer/transfer.routes.js';
 import { anunciar, PORTA_DESCOBERTA } from './lib/descoberta.js';
 import { FORMATO_DO_PACOTE } from '../shared/transferencia.js';
@@ -32,26 +35,39 @@ dotenv.config();
 const app = express();
 const PORT = Number(process.env.PORT ?? 3101);
 
+// O cookie de sessao so e enviado pela propria origem (SameSite=Lax, sem
+// `credentials` no CORS), entao liberar a origem aqui nao abre a API para
+// outros sites: serve ao app do iPhone e ao MCP, que usam token.
 app.use(cors({ origin: '*', methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'] }));
-app.use(express.json({ limit: '2mb' }));
-
 /**
- * A transferencia entra antes do porteiro geral.
- *
- * O celular nao tem como apresentar o `CHRONOS_ACCESS_TOKEN` do `.env`, e
- * entrega-lo a ele daria acesso a API inteira em vez de a uma transferencia.
- * Entao este modulo tem a propria porta: um codigo de seis digitos que voce
- * libera na tela, vale cinco minutos e serve uma vez. Cada rota de la declara
- * quem pode chama-la.
+ * Corpo JSON de ate 2mb no resto da API. As duas rotas de corpo grande leem o
+ * proprio corpo com limite maior (64mb na importacao, 25mb no audio); se este
+ * leitor rodasse antes, ele recusaria com 413 o que elas aceitariam.
  */
-app.use('/api/transfer', transferRoutes);
+const CORPO_GRANDE = new Set(['/api/transfer/import', '/api/ai/transcribe']);
+const jsonPadrao = express.json({ limit: '2mb' });
+app.use((req, res, next) => (CORPO_GRANDE.has(req.path) ? next() : jsonPadrao(req, res, next)));
+app.use(abrirContexto);
 
-// Antes de qualquer outra rota, inclusive da tela: de fora, so com token.
-app.use(exigeAcesso());
-
+// Antes do porteiro: e o que o balanceador ou o tunel consultam para saber se
+// o app esta de pe. Nao diz nada sobre os dados.
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', app: 'Chronos Flow v2', timestamp: new Date().toISOString() });
 });
+
+// Entrar, cadastrar e consultar o estado da sessao precisam funcionar sem login.
+app.use('/api/auth', authRoutes);
+
+/**
+ * A transferencia tem porta propria: o celular nao faz login, entao ali vale
+ * a sessao de quem esta no computador OU o codigo de seis digitos que essa
+ * pessoa liberou na tela. Cada rota de la declara quem pode chama-la.
+ */
+app.use('/api/transfer', transferRoutes);
+
+// Todo o resto da API exige conta. A tela (o `dist`) continua aberta: sem
+// login ela so sabe mostrar o formulario de entrada.
+app.use('/api', exigeLogin);
 
 app.use('/api/nodes', nodeRoutes);
 app.use('/api/dependencies', dependencyRoutes);
@@ -65,6 +81,7 @@ app.use('/api/backlog', backlogRoutes);
 app.use('/api/templates', templateRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/updates', updateRoutes);
+app.use('/api/admin', adminRoutes);
 
 /**
  * A tela sai do mesmo servidor que a API quando `dist` existe. E o que faz o
@@ -112,35 +129,50 @@ app.use(
     }
 
     console.error('[api]', err);
+    // Em producao a mensagem crua (detalhes do Prisma, do banco) fica so no log.
     return res.status(500).json({
-      error: { code: 'INTERNAL', message: (err as Error)?.message ?? 'Erro interno.' },
+      error: {
+        code: 'INTERNAL',
+        message:
+          process.env.NODE_ENV === 'production'
+            ? 'Erro interno.'
+            : ((err as Error)?.message ?? 'Erro interno.'),
+      },
     });
   },
 );
 
 if (process.env.NODE_ENV !== 'test') {
-  // 0.0.0.0 por padrao: o porteiro acima e que decide quem entra, nao o bind.
+  // 0.0.0.0 por padrao: quem decide quem entra e o login, nao o bind.
   const HOST = process.env.HOST ?? '0.0.0.0';
 
   app.listen(PORT, HOST, async () => {
     console.log(`Chronos Flow v2 API em http://localhost:${PORT}`);
-
-    const aberto = Boolean((process.env.CHRONOS_ACCESS_TOKEN ?? '').trim());
-    for (const ip of enderecosDaRede()) {
-      console.log(`  na rede: http://${ip}:${PORT}${aberto ? '' : '  (bloqueado)'}`);
-    }
-    if (!aberto) {
-      console.log(
-        '  Conexoes de fora estao recusadas. Para liberar, defina' +
-          ' CHRONOS_ACCESS_TOKEN no .env e reinicie.',
-      );
-    }
+    for (const ip of enderecosDaRede()) console.log(`  na rede: http://${ip}:${PORT}`);
+    console.log(
+      process.env.CHRONOS_CONVITE
+        ? '  Cadastro: aberto para quem tiver o codigo de CHRONOS_CONVITE.'
+        : '  Cadastro: so a primeira conta, criada desta maquina; depois fecha (CHRONOS_CONVITE abre).',
+    );
+    prisma.user
+      .count({ where: { password_hash: { not: null } } })
+      .then((contas) => {
+        if (contas === 0 && !process.env.CHRONOS_CONVITE) {
+          console.warn(
+            '  ATENCAO: nenhuma conta ainda e CHRONOS_CONVITE vazio. Pela rede ninguem consegue' +
+              ' criar a primeira conta; defina o convite se este servidor for acessado de fora.',
+          );
+        }
+      })
+      .catch(() => {});
 
     // O anuncio na rede nao expoe dado nenhum: diz que existe um Chronos
-    // aqui. O que vale alguma coisa so sai com o codigo de pareamento.
-    anunciar({ nome: nomeDesteComputador(), porta: PORT, formato: FORMATO_DO_PACOTE })
-      .then(() => console.log(`  descoberta na rede: UDP ${PORTA_DESCOBERTA} e Bonjour _chronos._tcp`))
-      .catch((e: Error) => console.warn('[descoberta]', e.message));
+    // aqui. Na nuvem nao ha rede local para achar, dai o desligamento.
+    if (process.env.CHRONOS_DESCOBERTA !== 'off') {
+      anunciar({ nome: nomeDesteComputador(), porta: PORT, formato: FORMATO_DO_PACOTE })
+        .then(() => console.log(`  descoberta na rede: UDP ${PORTA_DESCOBERTA} e Bonjour _chronos._tcp`))
+        .catch((e: Error) => console.warn('[descoberta]', e.message));
+    }
 
     const missing = missingModels();
     if (missing.length > 0) {
@@ -153,12 +185,19 @@ if (process.env.NODE_ENV !== 'test') {
       );
     }
     try {
-      const userId = await currentUserId();
-      const result = await recomputeAll(userId);
-      if (result.nodes > 0) {
-        console.log(`Cascata verificada: ${result.nodes} nos em ${result.roots} meta(s).`);
+      // Uma conta por vez: cada uma tem a propria arvore e os proprios snapshots.
+      const contas = await prisma.user.findMany({ select: { id: true } });
+      let nos = 0;
+      let metas = 0;
+      for (const { id } of contas) {
+        const result = await recomputeAll(id);
+        nos += result.nodes;
+        metas += result.roots;
+        await captureSnapshots(id);
       }
-      await captureSnapshots(userId);
+      if (nos > 0) {
+        console.log(`Cascata verificada: ${nos} nos em ${metas} meta(s), ${contas.length} conta(s).`);
+      }
     } catch {
       // Banco ainda subindo: o app tenta de novo na proxima requisicao.
     }

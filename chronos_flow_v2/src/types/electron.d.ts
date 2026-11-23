@@ -19,6 +19,12 @@ export interface ChronosElectron {
   bounceDock: (type?: 'critical' | 'informational') => void;
   openExternal: (url: string) => Promise<void>;
   onNavigateToNode: (cb: (nodeId: string) => void) => () => void;
+  /** Servidor do Chronos em uso no app instalado (ver electron/servidores.ts). */
+  servidor?: {
+    atual: () => Promise<{ nome: string; url: string; local?: boolean } | null>;
+    /** Volta para a tela de escolha de servidor. */
+    trocar: () => Promise<void>;
+  };
 }
 
 declare global {

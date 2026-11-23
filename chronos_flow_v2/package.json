@@ -29,6 +29,7 @@
     "db:baseline": "node prisma/baseline.mjs",
     "db:setup": "prisma migrate dev && npm run prisma:seed",
     "recompute": "tsx server/scripts/recompute.ts",
+    "conta:senha": "tsx server/scripts/senha.ts",
     "migrate:v1": "tsx server/scripts/migrate-v1.ts"
   },
   "prisma": {

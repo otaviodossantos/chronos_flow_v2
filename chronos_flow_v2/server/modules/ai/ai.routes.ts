@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../../db/client.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { currentUserId } from '../../lib/currentUser.js';
+import { preservarContexto, somenteSessao } from '../../lib/sessao.js';
 import { aiSettingsSchema } from '../../../shared/schemas/index.js';
 import { listModels, transcribeAudio } from './gemini.js';
 
@@ -21,7 +22,9 @@ router.get(
     res.json({
       configured: Boolean(user.gemini_api_key || envKey),
       source: user.gemini_api_key ? 'settings' : envKey ? 'env' : null,
-      maskedKey: mask(user.gemini_api_key ?? envKey),
+      // A chave do servidor vale para todas as contas, mas nao e de nenhuma:
+      // nem o pedaco mascarado dela aparece na tela de quem a usa.
+      maskedKey: mask(user.gemini_api_key),
       model: user.gemini_model,
     });
   }),
@@ -29,6 +32,7 @@ router.get(
 
 router.patch(
   '/settings',
+  somenteSessao,
   asyncHandler(async (req, res) => {
     const userId = await currentUserId();
     const body = aiSettingsSchema.parse(req.body);
@@ -71,7 +75,7 @@ const transcribeSchema = z.object({
  */
 router.post(
   '/transcribe',
-  json({ limit: '25mb' }),
+  preservarContexto(json({ limit: '25mb' })),
   asyncHandler(async (req, res) => {
     const userId = await currentUserId();
     const { audio, mimeType } = transcribeSchema.parse(req.body);

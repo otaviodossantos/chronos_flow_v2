@@ -15,6 +15,7 @@ import { usePublicarResumo } from '@/features/focus/usePublicarResumo';
 import { useAvisos } from '@/features/avisos/useAvisos';
 import { api } from '@/lib/api';
 import { abrirBanco } from '@/data/partida';
+import { Porteira } from '@/features/conta/Porteira';
 import { useTimelineStore } from '@/stores/timelineStore';
 import { useThemeStore } from '@/stores/themeStore';
 
@@ -140,9 +141,13 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ComBanco>
-        <TooltipProvider delayDuration={200}>
-          <Shell />
-        </TooltipProvider>
+        {/* O banco do aparelho abre sempre (as preferencias moram nele); a
+            porteira decide se os projetos vem dele ou de um servidor. */}
+        <Porteira>
+          <TooltipProvider delayDuration={200}>
+            <Shell />
+          </TooltipProvider>
+        </Porteira>
       </ComBanco>
     </QueryClientProvider>
   );
