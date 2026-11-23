@@ -42,6 +42,17 @@ const daysFromNow = (d: number) => {
 };
 
 async function main() {
+  // O seed apaga o banco inteiro, contas inclusive. Com alguem cadastrado, so
+  // com confirmacao explicita: rodado por engano em producao, levaria todo mundo.
+  const contas = await prisma.user.count({ where: { password_hash: { not: null } } });
+  if (contas > 0 && process.env.SEED_APAGAR_CONTAS !== 'sim') {
+    console.error(
+      `Este banco tem ${contas} conta(s) com login. O seed apagaria todas.\n` +
+        'Se e isso mesmo, rode com SEED_APAGAR_CONTAS=sim.',
+    );
+    process.exit(1);
+  }
+
   console.log('Limpando base...');
   await prisma.nodeActivity.deleteMany();
   await prisma.progressSnapshot.deleteMany();

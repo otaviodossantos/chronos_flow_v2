@@ -20,6 +20,7 @@ import { isFloatingWindow } from '@/lib/floatingWindow';
 import { useTimelineStore } from '@/stores/timelineStore';
 import { useThemeStore } from '@/stores/themeStore';
 import { useUiStore } from '@/stores/uiStore';
+import { AuthGate } from '@/features/auth/AuthGate';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -99,7 +100,9 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider delayDuration={200}>
-        <Shell />
+        <AuthGate>
+          <Shell />
+        </AuthGate>
       </TooltipProvider>
     </QueryClientProvider>
   );

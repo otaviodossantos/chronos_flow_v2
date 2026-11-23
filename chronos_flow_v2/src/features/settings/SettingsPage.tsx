@@ -21,6 +21,7 @@ import { RESET_PHRASE } from '@shared/schemas/index';
 import { useThemeStore } from '@/stores/themeStore';
 import { WeeksGrid } from '@/features/life/WeeksGrid';
 import { Transferencia } from './Transferencia';
+import { ContaCard } from './ContaCard';
 
 export function SettingsPage() {
   const queryClient = useQueryClient();
@@ -72,6 +73,8 @@ export function SettingsPage() {
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-3xl p-6">
         <h1 className="text-3xl font-semibold tracking-tight">Configuracoes</h1>
+
+        <ContaCard />
 
         <Card className="mt-6">
           <CardHeader>

@@ -107,6 +107,8 @@ interface TimelineState {
   setConclusao: (filtro: ConclusaoFiltro) => void;
   togglePalette: () => void;
   setDraggingTemplate: (id: string | null) => void;
+  /** Esquece selecao e filtros: ao trocar de conta eles apontariam para dados de outra pessoa. */
+  esquecerConta: () => void;
 }
 
 /**
@@ -194,4 +196,15 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
   setConclusao: (conclusao) => set({ conclusao }),
   togglePalette: () => set((s) => ({ paletteOpen: !s.paletteOpen })),
   setDraggingTemplate: (draggingTemplateId) => set({ draggingTemplateId }),
+  esquecerConta: () =>
+    set({
+      selectedId: null,
+      detailTab: 'details',
+      spaceId: null,
+      assigneeId: null,
+      statusFilter: [],
+      search: '',
+      overrides: new Map<string, boolean>(),
+      draggingTemplateId: null,
+    }),
 }));

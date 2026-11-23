@@ -7,7 +7,12 @@ import { z } from 'zod';
 import { createSpaceSchema } from '../../../shared/schemas/index.js';
 import { num, toSpaceDTO } from '../../lib/serialize.js';
 
+import { donoDoParam, garantirDono } from '../../lib/dono.js';
+
 const router = Router();
+
+router.param('id', donoDoParam('space'));
+router.param('memberId', donoDoParam('member'));
 
 router.get(
   '/',
@@ -94,6 +99,7 @@ router.post(
   '/:id/members',
   asyncHandler(async (req, res) => {
     const { member_id } = z.object({ member_id: z.string().uuid() }).parse(req.body);
+    await garantirDono('member', member_id);
 
     const [space, member] = await Promise.all([
       prisma.space.findUnique({ where: { id: req.params.id } }),

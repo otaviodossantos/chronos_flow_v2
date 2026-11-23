@@ -1,5 +1,5 @@
 import dgram from 'node:dgram';
-import { enderecosDaRede } from './acesso.js';
+import { enderecosDaRede } from './rede.js';
 
 /**
  * Como o celular acha este computador sem ninguem digitar um IP.
@@ -98,7 +98,10 @@ export async function anunciar(opcoes: {
 
   let pararBonjour: (() => Promise<void>) | null = null;
   try {
-    const { Bonjour } = (await import('bonjour-service')) as {
+    // Via `unknown`: o tipo real do pacote pede opcoes no construtor e no
+    // publish que nao usamos, e a conversao direta nao compilava (travava o
+    // `npm run build`).
+    const { Bonjour } = (await import('bonjour-service')) as unknown as {
       Bonjour: new () => {
         publish: (o: Record<string, unknown>) => { stop: (cb?: () => void) => void };
         destroy: () => void;

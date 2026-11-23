@@ -1,8 +1,8 @@
 # Chronos Flow v2
 
 Gestao de projetos com **tarefas recursivas**, **progresso em cascata bottom-up**
-e uma **timeline telescopica**. Aplicacao desktop local (Electron), single-user,
-sobre PostgreSQL.
+e uma **timeline telescopica**. Aplicacao desktop (Electron) ou web, com contas
+(cada pessoa ve so os proprios projetos), sobre PostgreSQL.
 
 A v2 substitui a tabela plana de tarefas da v1 por uma arvore sem limite de
 niveis: meta macro e microtarefa sao a mesma entidade, diferenciadas apenas por
@@ -113,6 +113,24 @@ valem para as tres.
 As duas trocas de status passam por `POST /api/nodes/:id/status`, que decide o
 caminho (`server/domain/status.ts`): concluir folha, reabrir ou gravar direto.
 
+### Contas e login
+
+Toda a API exige login (e-mail e senha, sessao por cookie). Cada conta ve e
+mexe so nos proprios dados: as rotas conferem o dono de todo id que recebem,
+na URL ou no corpo (`server/lib/dono.ts`).
+
+- **Primeiro acesso:** a primeira conta criada herda os dados que ja estavam no
+  banco, entao quem usava o app sozinho nao perde nada. Sem convite, ela so pode
+  ser criada desta propria maquina (o app desktop); pela rede, exige o convite.
+- **Mais contas:** so com o codigo de `CHRONOS_CONVITE` no `.env`. Sem ele, o
+  cadastro fecha depois da primeira conta.
+- **MCP e scripts:** usam um token de API pessoal (Configuracoes > Conta e
+  acesso), passado em `CHRONOS_TOKEN`. O token le e escreve projetos, mas nao
+  troca senha, nao cria outros tokens, nao apaga a conta nem transfere dados.
+  Trocar a senha revoga todos os tokens.
+- **Freios:** 10 tentativas de login por e-mail e 30 por cliente a cada 15 minutos.
+- **Esqueceu a senha:** `echo 'senha-nova' | npm run -s conta:senha -- pessoa@exemplo.com`.
+
 ### Atualizacoes
 
 Cada tarefa tem um feed de atualizacoes em markdown (aba **Atualizacoes** do
@@ -166,6 +184,10 @@ React. Um teste de cascata de sete niveis roda em milissegundos, sem banco.
 | `npm run recompute` | Recalcula path, progresso, folhas e impacto de toda a base |
 | `npm run migrate:v1` | Migra os dados da v1 (precisa de `V1_DATABASE_URL`) |
 | `npm run -s mcp` | Sobe o servidor MCP (ver `mcp/README.md`) |
+| `npm run conta:senha -- <email>` | Redefine a senha de uma conta (senha nova pela entrada padrao) |
+
+Deploy em servidor (Docker + Postgres, atras de HTTPS): ver
+[`deploy/DEPLOY.md`](deploy/DEPLOY.md).
 
 ---
 

@@ -332,3 +332,30 @@ export const setStatusSchema = z.object({
   status: z.enum(['PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED']),
 });
 export type SetStatusInput = z.infer<typeof setStatusSchema>;
+
+/* ── Contas ─────────────────────────────────────────────────────────────── */
+
+const email = z.string().trim().toLowerCase().email('e-mail invalido').max(200);
+const senha = z.string().min(8, 'a senha precisa de pelo menos 8 caracteres').max(200);
+
+export const cadastroSchema = z.object({
+  nome: z.string().trim().min(1, 'nome obrigatorio').max(120),
+  email,
+  senha,
+  /** Exigido quando o servidor define CHRONOS_CONVITE. */
+  convite: z.string().max(200).optional(),
+});
+
+export const entrarSchema = z.object({
+  email,
+  senha: z.string().min(1).max(200),
+});
+
+export const trocarSenhaSchema = z.object({
+  atual: z.string().min(1).max(200),
+  nova: senha,
+});
+
+export const criarTokenSchema = z.object({
+  nome: z.string().trim().min(1, 'de um nome ao token').max(80),
+});

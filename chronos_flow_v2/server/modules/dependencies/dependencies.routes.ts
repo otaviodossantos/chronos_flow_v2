@@ -6,7 +6,11 @@ import { AppError, notFound } from '../../lib/errors.js';
 import { createDependencySchema } from '../../../shared/schemas/index.js';
 import { findCycle, criticalPath, blockedNodeIds } from '../../domain/dependencies.js';
 
+import { donoDoParam, garantirDono } from '../../lib/dono.js';
+
 const router = Router();
+
+router.param('id', donoDoParam('dependency'));
 
 router.get(
   '/critical-path',
@@ -34,6 +38,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const userId = await currentUserId();
     const body = createDependencySchema.parse(req.body);
+    await garantirDono('node', [body.blocker_id, body.blocked_id]);
 
     const [blocker, blocked] = await Promise.all([
       prisma.node.findUnique({ where: { id: body.blocker_id }, select: { id: true, title: true, path: true, status: true } }),

@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { prisma } from '../../db/client.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
-import { currentUserId, resetUserCache } from '../../lib/currentUser.js';
+import { currentUserId } from '../../lib/currentUser.js';
+import { somenteSessao } from '../../lib/sessao.js';
 import { num } from '../../lib/serialize.js';
 import { updateUserSchema, resetSchema } from '../../../shared/schemas/index.js';
 import { recomputeAll } from '../nodes/cascade.service.js';
@@ -85,6 +86,7 @@ router.get(
  */
 router.post(
   '/reset',
+  somenteSessao,
   asyncHandler(async (req, res) => {
     const userId = await currentUserId();
     const { includeProfile } = resetSchema.parse(req.body);
@@ -118,9 +120,6 @@ router.post(
         backlog: backlog.count,
       };
     });
-
-    // O id em cache apontaria para um usuario que nao existe mais.
-    if (includeProfile) resetUserCache();
 
     res.json({ reset: true, profileRemoved: Boolean(includeProfile), deleted });
   }),
