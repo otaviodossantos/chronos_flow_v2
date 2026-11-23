@@ -10,6 +10,7 @@ import {
   ancestorIdsBottomUp,
 } from '../../domain/path.js';
 import { canComplete, weightFromEstimate, statusAfterReopen } from '../../domain/cascade.js';
+import { stepsToStatus } from '../../domain/status.js';
 import { blockedNodeIds, newlyUnblocked } from '../../domain/dependencies.js';
 import {
   janelaDeCriacao,
@@ -29,9 +30,15 @@ import type {
   UpdateNodeInput,
   BreakdownInput,
   RescheduleInput,
+  SetStatusInput,
   TreeQuery,
 } from '../../../shared/schemas/index.js';
-import type { CompleteResult, NodeDTO, ReopenResult } from '../../../shared/types.js';
+import type {
+  CompleteResult,
+  NodeDTO,
+  ReopenResult,
+  SetStatusResult,
+} from '../../../shared/types.js';
 
 async function logActivity(tx: Tx, nodeId: string, kind: string, message: string) {
   await tx.nodeActivity.create({ data: { node_id: nodeId, kind, message } });
@@ -949,4 +956,37 @@ export async function deleteNode(id: string) {
     }
     return { deleted: true, removed: descendants + 1 };
   });
+}
+
+/**
+ * Leva o no ao status pedido pelo caminho certo (ver `domain/status.ts`).
+ *
+ * Os passos rodam em transacoes separadas porque cada um ja e uma transacao
+ * propria no servico. Se o segundo falhar — "em andamento" numa tarefa que
+ * voltou a ficar bloqueada, por exemplo — o no fica no estado do primeiro, que
+ * e sempre um estado valido: reaberto e pendente.
+ */
+export async function setStatus(
+  userId: string,
+  id: string,
+  input: SetStatusInput,
+): Promise<SetStatusResult> {
+  const atual = await repo.findNode(id);
+  if (!atual) throw notFound('No');
+
+  const steps = stepsToStatus(atual.status, input.status, atual._count.children === 0);
+  const result: SetStatusResult = { node: toNodeDTO(atual), steps };
+
+  for (const step of steps) {
+    if (step === 'complete') {
+      result.completed = await completeLeaf(userId, id);
+      result.node = result.completed.node;
+    } else if (step === 'reopen') {
+      result.reopened = await reopenNode(userId, id);
+      result.node = result.reopened.node;
+    } else {
+      result.node = await updateNode(userId, id, { status: input.status });
+    }
+  }
+  return result;
 }

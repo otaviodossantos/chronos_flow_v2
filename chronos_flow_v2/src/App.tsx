@@ -4,6 +4,8 @@ import { Toaster } from 'sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Sidebar, type Tab } from '@/components/Sidebar';
 import { TimelinePage } from '@/features/timeline/TimelinePage';
+import { TableView } from '@/features/board/TableView';
+import { KanbanView } from '@/features/board/KanbanView';
 import { FocusPage } from '@/features/focus/FocusPage';
 import { BacklogPage } from '@/features/backlog/BacklogPage';
 import { TeamPage } from '@/features/team/TeamPage';
@@ -31,6 +33,7 @@ function Shell() {
   const floating = useFloatingWidget();
   const selectNode = useTimelineStore((s) => s.select);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
+  const projectView = useUiStore((s) => s.projectView);
 
   // Cmd/Ctrl+B: o mesmo atalho de editor e de app de notas para a barra
   // lateral. Fica no shell, e nao na barra, para funcionar com o foco em
@@ -53,7 +56,14 @@ function Shell() {
       <div className="flex min-h-0 flex-1">
         <Sidebar tab={tab} onTab={setTab} />
         <main className="min-w-0 flex-1">
-          {tab === 'timeline' && <TimelinePage onOpenWidget={floating.open} />}
+          {/* Uma tela de projetos, tres jeitos de ver a mesma arvore. */}
+          {tab === 'timeline' && projectView === 'timeline' && (
+            <TimelinePage onOpenWidget={floating.open} />
+          )}
+          {tab === 'timeline' && projectView === 'table' && <TableView onOpenWidget={floating.open} />}
+          {tab === 'timeline' && projectView === 'kanban' && (
+            <KanbanView onOpenWidget={floating.open} />
+          )}
           {tab === 'focus' && (
             <FocusPage onNavigateToTimeline={() => setTab('timeline')} onOpenWidget={floating.open} />
           )}

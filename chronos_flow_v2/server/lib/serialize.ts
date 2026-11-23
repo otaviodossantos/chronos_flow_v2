@@ -1,4 +1,10 @@
-import type { NodeDTO, MemberDTO, SpaceDTO, TaskTemplateDTO } from '../../shared/types.js';
+import type {
+  NodeDTO,
+  MemberDTO,
+  SpaceDTO,
+  TaskTemplateDTO,
+  NodeUpdateDTO,
+} from '../../shared/types.js';
 
 type Dec = { toNumber(): number } | number | null | undefined;
 
@@ -51,6 +57,7 @@ export function toNodeDTO(
     assignee: n.assignee ? toMemberDTO(n.assignee) : null,
     blockedBy: extra.blockedBy,
     blocks: extra.blocks,
+    ...(n._count?.updates !== undefined ? { updates_count: n._count.updates } : {}),
     created_at: n.created_at.toISOString(),
     updated_at: n.updated_at.toISOString(),
   };
@@ -113,4 +120,20 @@ export function parseDate(value: unknown): Date | null {
   if (value == null || value === '') return null;
   const d = new Date(value as string);
   return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * Uma atualizacao conta como editada quando o texto mudou depois de publicado.
+ * A folga de 2s cobre o `updated_at` que o Prisma grava no proprio insert.
+ */
+export function toNodeUpdateDTO(u: any): NodeUpdateDTO {
+  return {
+    id: u.id,
+    node_id: u.node_id,
+    author: u.author,
+    body: u.body,
+    created_at: u.created_at.toISOString(),
+    updated_at: u.updated_at.toISOString(),
+    edited: u.updated_at.getTime() - u.created_at.getTime() > 2000,
+  };
 }

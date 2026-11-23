@@ -50,6 +50,8 @@ export const PAN_MINUTES: Record<ZoomLevel, number> = {
 
 export const ROW_HEIGHT = 40;
 
+export type DetailTab = 'details' | 'updates';
+
 interface TimelineState {
   zoom: ZoomLevel;
   viewportStart: Date;
@@ -61,6 +63,8 @@ interface TimelineState {
   overrides: Map<string, boolean>;
   maxDepth: number;
   selectedId: string | null;
+  /** Aba do painel de detalhe: o balao de atualizacoes abre direto no feed. */
+  detailTab: DetailTab;
   spaceId: string | null;
   assigneeId: string | null;
   statusFilter: string[];
@@ -91,6 +95,9 @@ interface TimelineState {
   collapseAll: () => void;
   setMaxDepth: (depth: number) => void;
   select: (id: string | null) => void;
+  /** Seleciona e ja escolhe a aba do painel. */
+  openNode: (id: string, tab?: DetailTab) => void;
+  setDetailTab: (tab: DetailTab) => void;
   setSpace: (id: string | null) => void;
   setAssignee: (id: string | null) => void;
   toggleStatus: (status: string) => void;
@@ -130,6 +137,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
   overrides: new Map<string, boolean>(),
   maxDepth: 2,
   selectedId: null,
+  detailTab: 'details',
   spaceId: null,
   assigneeId: null,
   statusFilter: [],
@@ -168,6 +176,8 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
   // senao o botao pareceria nao fazer efeito nos nos ja tocados a mao.
   setMaxDepth: (maxDepth) => set({ maxDepth, overrides: new Map<string, boolean>() }),
   select: (selectedId) => set({ selectedId }),
+  openNode: (selectedId, detailTab = 'details') => set({ selectedId, detailTab }),
+  setDetailTab: (detailTab) => set({ detailTab }),
   setSpace: (spaceId) => set({ spaceId }),
   setAssignee: (assigneeId) => set({ assigneeId }),
   toggleStatus: (status) =>

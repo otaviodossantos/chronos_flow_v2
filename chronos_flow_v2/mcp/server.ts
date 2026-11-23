@@ -49,7 +49,9 @@ export const tools: Tool[] = [
   },
   {
     name: 'get_node',
-    description: 'Um no com ancestrais, filhas, dependencias e atividade recente.',
+    description:
+      'Um no com ancestrais, filhas, dependencias e atividade recente. ' +
+      '`updates_count` diz quantas atualizacoes ele tem (leia com list_updates).',
     inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
     run: (args) => call(`/nodes/${args.id}`),
   },
@@ -156,6 +158,110 @@ export const tools: Tool[] = [
     description: 'Diagnostico de risco por ramificacao da arvore.',
     inputSchema: { type: 'object', properties: {} },
     run: () => call('/reports/risk-map'),
+  },
+  {
+    name: 'list_spaces',
+    description: 'Lista os espacos (agrupadores de projetos) com id, cor e progresso.',
+    inputSchema: { type: 'object', properties: {} },
+    run: () => call('/spaces'),
+  },
+  {
+    name: 'list_members',
+    description:
+      'Lista os membros da equipe com id, papel e carga atual. Use o id em assignee_id.',
+    inputSchema: { type: 'object', properties: {} },
+    run: () => call('/members'),
+  },
+  {
+    name: 'update_node',
+    description:
+      'Edita campos de um no: titulo, descricao, responsavel, datas, estimativa, criticidade. ' +
+      'E o que muda as colunas da visao Tabela. Para status use set_status.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        title: { type: 'string' },
+        description: { type: 'string', description: 'Texto da tarefa (o que ela e)' },
+        assignee_id: { type: ['string', 'null'], description: 'null tira o responsavel' },
+        start_date: { type: ['string', 'null'], description: 'ISO 8601' },
+        due_date: { type: ['string', 'null'], description: 'ISO 8601' },
+        estimated_minutes: { type: ['number', 'null'] },
+        importance: { type: 'number', description: '1 (minimo) a 5 (critico)' },
+      },
+      required: ['id'],
+    },
+    run: ({ id, ...body }) =>
+      call(`/nodes/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  },
+  {
+    name: 'set_status',
+    description:
+      'Muda o status de um no, como arrastar o cartao no Kanban. COMPLETED numa folha dispara a ' +
+      'cascata (igual a complete_leaf); sair de COMPLETED/CANCELLED reabre os ancestrais. ' +
+      'BLOCKED nao se define a mao: vem das dependencias.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        status: { type: 'string', enum: ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'] },
+      },
+      required: ['id', 'status'],
+    },
+    run: (args) =>
+      call(`/nodes/${args.id}/status`, {
+        method: 'POST',
+        body: JSON.stringify({ status: args.status }),
+      }),
+  },
+  {
+    name: 'add_update',
+    description:
+      'Publica uma atualizacao no feed da tarefa (estilo Monday). O corpo e markdown: titulos, ' +
+      'listas, checklists "- [ ]", tabelas, links e codigo. Use para registrar andamento, ' +
+      'decisoes e pendencias; a descricao da tarefa fica para o que ela e.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        node_id: { type: 'string' },
+        body: { type: 'string', description: 'Markdown' },
+        author: {
+          type: 'string',
+          description: 'Quem assina. Padrao: "IA via MCP"',
+        },
+      },
+      required: ['node_id', 'body'],
+    },
+    run: (args) =>
+      call('/updates', {
+        method: 'POST',
+        body: JSON.stringify({
+          node_id: args.node_id,
+          body: args.body,
+          author: args.author ?? 'IA via MCP',
+        }),
+      }),
+  },
+  {
+    name: 'list_updates',
+    description: 'Lista as atualizacoes de uma tarefa, a mais nova primeiro, com o markdown cru.',
+    inputSchema: {
+      type: 'object',
+      properties: { node_id: { type: 'string' } },
+      required: ['node_id'],
+    },
+    run: (args) => call(`/updates?${new URLSearchParams({ nodeId: args.node_id })}`),
+  },
+  {
+    name: 'edit_update',
+    description: 'Reescreve o markdown de uma atualizacao ja publicada (fica marcada como editada).',
+    inputSchema: {
+      type: 'object',
+      properties: { id: { type: 'string' }, body: { type: 'string', description: 'Markdown' } },
+      required: ['id', 'body'],
+    },
+    run: (args) =>
+      call(`/updates/${args.id}`, { method: 'PATCH', body: JSON.stringify({ body: args.body }) }),
   },
 ];
 

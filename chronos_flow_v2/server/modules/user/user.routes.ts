@@ -92,6 +92,9 @@ router.post(
     const deleted = await prisma.$transaction(async (tx) => {
       // Ordem explicita em vez de confiar no cascade de cada relacao.
       await tx.nodeActivity.deleteMany({ where: { node: { user_id: userId } } });
+      if (hasModel('nodeUpdate')) {
+        await tx.nodeUpdate.deleteMany({ where: { node: { user_id: userId } } });
+      }
       await tx.progressSnapshot.deleteMany({ where: { node: { user_id: userId } } });
       await tx.nodeDependency.deleteMany({ where: { blocked: { user_id: userId } } });
       if (hasModel('backlogRole')) {
