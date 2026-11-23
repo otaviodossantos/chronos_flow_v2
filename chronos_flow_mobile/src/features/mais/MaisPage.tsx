@@ -6,6 +6,8 @@ import { DadosDoAparelho } from './DadosDoAparelho';
 import { LifeStrip } from '@/features/life/LifeStrip';
 import { Switch } from '@/components/ui/switch';
 import { useThemeStore } from '@/stores/themeStore';
+import { ContaEServidor } from '@/features/conta/ContaEServidor';
+import { NO_APARELHO, useConexao } from '@/data/servidores';
 
 type Destino = 'equipe' | 'ajustes' | 'vida' | null;
 
@@ -25,6 +27,7 @@ const ITENS: Array<{ id: Exclude<Destino, null>; label: string; nota: string; ic
 export function MaisPage() {
   const [destino, setDestino] = useState<Destino>(null);
   const { theme, toggle } = useThemeStore();
+  const noAparelho = useConexao((s) => s.atual === NO_APARELHO);
 
   if (destino) {
     const titulo = ITENS.find((i) => i.id === destino)!.label;
@@ -47,7 +50,8 @@ export function MaisPage() {
           {destino === 'ajustes' && (
             <>
               <SettingsPage />
-              <DadosDoAparelho />
+              {/* Copia, restauracao e Wi-Fi sao do banco deste iPhone. */}
+              {noAparelho && <DadosDoAparelho />}
             </>
           )}
           {destino === 'vida' && (
@@ -63,6 +67,8 @@ export function MaisPage() {
   return (
     <div className="h-full overflow-y-auto">
       <h1 className="px-4 pb-2 pt-4 text-2xl font-semibold tracking-tight">Mais</h1>
+
+      <ContaEServidor />
 
       <div className="mt-2 divide-y border-y bg-card">
         {ITENS.map((item) => (
@@ -91,7 +97,9 @@ export function MaisPage() {
       </div>
 
       <p className="px-4 py-6 text-center text-[11px] text-muted-foreground">
-        Tudo fica neste aparelho. Nada sai daqui sem voce pedir.
+        {noAparelho
+          ? 'Tudo fica neste aparelho. Nada sai daqui sem voce pedir.'
+          : 'Os projetos ficam no servidor: os mesmos que voce ve no computador.'}
       </p>
     </div>
   );

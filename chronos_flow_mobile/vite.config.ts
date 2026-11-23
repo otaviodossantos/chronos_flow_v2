@@ -22,6 +22,8 @@ export default defineConfig({
       '@core': path.join(desktop, 'server', 'domain'),
       '@shared': path.join(desktop, 'shared'),
       '@ia': path.join(desktop, 'server', 'modules', 'ai'),
+      // O cliente HTTP do desktop: no modo servidor o iPhone fala a mesma API.
+      '@desktop': desktop,
     },
   },
   server: {

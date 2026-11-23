@@ -13,6 +13,7 @@ export default defineConfig({
       '@core': path.join(desktop, 'server', 'domain'),
       '@shared': path.join(desktop, 'shared'),
       '@ia': path.join(desktop, 'server', 'modules', 'ai'),
+      '@desktop': desktop,
     },
   },
   test: { include: ['tests/**/*.test.ts'], environment: 'node' },

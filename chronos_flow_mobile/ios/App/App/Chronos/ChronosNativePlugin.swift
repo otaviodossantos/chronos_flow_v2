@@ -32,6 +32,9 @@ public class ChronosNativePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "estadoDosAvisos", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "pedirPermissaoDeAvisos", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "sincronizarAvisos", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "guardarSegredo", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "lerSegredo", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "apagarSegredo", returnType: CAPPluginReturnPromise),
     ]
 
     private let iso: ISO8601DateFormatter = {
@@ -498,5 +501,69 @@ extension ChronosNativePlugin: CNContactPickerDelegate {
         // Cancelar nao e erro: a tela do app so precisa saber que nao veio
         // ninguem, e rejeitar aqui viraria um toast de falha a cada desistencia.
         chamada?.resolve(["contatos": [] as [Any], "cancelado": true])
+    }
+}
+
+// MARK: - Cofre (Keychain)
+
+/// Onde mora o login dos servidores: o token da sessao de cada um.
+///
+/// Keychain e nao `Preferences`: as preferencias sao um plist legivel dentro
+/// do app e vao para o backup como texto; o Keychain e cifrado pelo sistema e,
+/// com `AfterFirstUnlockThisDeviceOnly`, nao sai deste aparelho nem no backup.
+extension ChronosNativePlugin {
+    private static let servicoDoCofre = "br.com.labds.chronosflow.servidores"
+
+    private func consulta(_ chave: String) -> [String: Any] {
+        [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: ChronosNativePlugin.servicoDoCofre,
+            kSecAttrAccount as String: chave,
+        ]
+    }
+
+    @objc func guardarSegredo(_ call: CAPPluginCall) {
+        guard let chave = call.getString("chave"), let valor = call.getString("valor") else {
+            call.reject("chave e valor sao obrigatorios")
+            return
+        }
+        let base = consulta(chave)
+        SecItemDelete(base as CFDictionary)
+        var novo = base
+        novo[kSecValueData as String] = Data(valor.utf8)
+        novo[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        let status = SecItemAdd(novo as CFDictionary, nil)
+        if status == errSecSuccess {
+            call.resolve()
+        } else {
+            call.reject("Keychain recusou guardar (\(status))")
+        }
+    }
+
+    @objc func lerSegredo(_ call: CAPPluginCall) {
+        guard let chave = call.getString("chave") else {
+            call.reject("chave e obrigatoria")
+            return
+        }
+        var pedido = consulta(chave)
+        pedido[kSecReturnData as String] = true
+        pedido[kSecMatchLimit as String] = kSecMatchLimitOne
+        var resultado: AnyObject?
+        let status = SecItemCopyMatching(pedido as CFDictionary, &resultado)
+        if status == errSecSuccess, let dados = resultado as? Data, let valor = String(data: dados, encoding: .utf8) {
+            call.resolve(["valor": valor])
+        } else {
+            // Nao achar e resposta normal (nunca entrou nesse servidor).
+            call.resolve(["valor": NSNull()])
+        }
+    }
+
+    @objc func apagarSegredo(_ call: CAPPluginCall) {
+        guard let chave = call.getString("chave") else {
+            call.reject("chave e obrigatoria")
+            return
+        }
+        SecItemDelete(consulta(chave) as CFDictionary)
+        call.resolve()
     }
 }

@@ -32,6 +32,8 @@ import {
   resetSchema,
 } from '@shared/schemas/index';
 import { generateJson, listModels, transcribeAudio, resolveModel } from '@ia/gemini';
+import { api as web, ApiError as ErroDoServidor } from '@desktop/src/lib/api';
+import { noServidor } from '@/data/servidores';
 import { planBacklogItem } from '@ia/planner';
 import { eq } from 'drizzle-orm';
 import { users } from '@db/schema';
@@ -166,7 +168,7 @@ async function configDaIA() {
   return { apiKey: u.gemini_api_key, model: await resolveModel(u.gemini_api_key, u.gemini_model) };
 }
 
-export const api = {
+const apiLocal = {
   // ---------------------------------------------------------------- arvore
   tree: (params: {
     rootId?: string;
@@ -438,6 +440,133 @@ export const api = {
         },
       };
     }),
+};
+
+/* ── Aparelho ou servidor ───────────────────────────────────────────────────
+
+ Com um servidor escolhido (ver `data/servidores.ts`), as mesmas chamadas vao
+ por HTTP, pelo cliente do proprio desktop — que ja fala exatamente esta API.
+ As telas continuam chamando `api.tree(...)` sem saber de que lado esta o dado.
+*/
+
+/** Erro do servidor vira o erro do app; falha de rede ganha uma frase que diga o que houve. */
+function remoto<F extends (...args: never[]) => Promise<unknown>>(f: F): F {
+  return (async (...args: Parameters<F>) => {
+    try {
+      return await f(...args);
+    } catch (erro) {
+      if (erro instanceof ErroDoServidor) throw new ApiError(erro.code, erro.message, erro.details);
+      throw new ApiError('SEM_CONEXAO', 'Nao foi possivel falar com o servidor. Confira a internet.');
+    }
+  }) as F;
+}
+
+type Api = typeof apiLocal;
+
+/**
+ * O cliente do desktop declara algumas respostas mais vagas (`unknown`) ou com
+ * menos campos do que o app local devolve. O servidor manda o que as telas
+ * do iPhone leem — conferido rota a rota —; a diferenca e so de declaracao.
+ */
+const comoNoAparelho = <K extends keyof Api>(f: (...args: never[]) => Promise<unknown>) =>
+  remoto(f) as unknown as Api[K];
+
+const apiRemota: Partial<Api> = {
+  addMemberToSpace: comoNoAparelho<'addMemberToSpace'>(web.addMemberToSpace),
+  aiModels: remoto(web.aiModels),
+  aiSettings: remoto(web.aiSettings),
+  applyBacklogPlan: comoNoAparelho<'applyBacklogPlan'>(web.applyBacklogPlan),
+  backlog: remoto(web.backlog),
+  breakdown: remoto(web.breakdown),
+  children: remoto(web.children),
+  completeNode: remoto(web.completeNode),
+  createBacklog: remoto(web.createBacklog),
+  createDependency: comoNoAparelho<'createDependency'>(web.createDependency),
+  createMember: remoto(web.createMember),
+  createNode: remoto(web.createNode),
+  createSpace: remoto(web.createSpace),
+  createTemplate: remoto(web.createTemplate),
+  dataSummary: remoto(web.dataSummary),
+  deleteBacklog: remoto(web.deleteBacklog),
+  deleteDependency: comoNoAparelho<'deleteDependency'>(web.deleteDependency),
+  deleteNode: remoto(web.deleteNode),
+  deleteTemplate: remoto(web.deleteTemplate),
+  focusQueue: remoto(web.focusQueue),
+  instantiateTemplate: remoto(web.instantiateTemplate),
+  life: remoto(web.life),
+  members: remoto(web.members),
+  moveNode: remoto(web.moveNode),
+  nodeDetail: remoto(web.nodeDetail),
+  planBacklog: remoto(web.planBacklog),
+  progressHistory: remoto(web.progressHistory),
+  recompute: remoto(web.recompute),
+  removeMemberFromSpace: remoto(web.removeMemberFromSpace),
+  reopenNode: remoto(web.reopenNode),
+  reschedule: remoto(web.reschedule),
+  resetAll: remoto(web.resetAll),
+  riskMap: remoto(web.riskMap),
+  saveBacklogPlan: remoto(web.saveBacklogPlan),
+  setBacklogRoleMember: comoNoAparelho<'setBacklogRoleMember'>(web.setBacklogRoleMember),
+  simulate: remoto(web.simulate),
+  spaces: remoto(web.spaces),
+  templates: remoto(web.templates),
+  transcribe: remoto(web.transcribe),
+  tree: remoto(web.tree),
+  updateAiSettings: remoto(web.updateAiSettings),
+  updateBacklog: remoto(web.updateBacklog),
+  updateMember: remoto(web.updateMember),
+  updateNode: remoto(web.updateNode),
+  updateTemplate: remoto(web.updateTemplate),
+  updateUser: comoNoAparelho<'updateUser'>(web.updateUser),
+  user: comoNoAparelho<'user'>(web.user),
+  velocity: remoto(web.velocity),
+
+  /** O widget pede uma chamada so; aqui sao duas, as duas leves. */
+  dayDigest: remoto(async () => {
+    const meiaNoite = new Date();
+    meiaNoite.setHours(0, 0, 0, 0);
+    const [fila, hoje] = await Promise.all([
+      web.focusQueue({ scope: 'today' }),
+      web.resumoDeHoje(meiaNoite.toISOString()),
+    ]);
+    const primeira = fila.queue[0];
+    return {
+      proxima: primeira?.node.title ?? null,
+      proximaInicio: primeira?.node.start_date ?? null,
+      pendentes: fila.queue.length,
+      ...hoje,
+    };
+  }),
+};
+
+/**
+ * Coisas do aparelho, que valem nos dois modos: as preferencias de aviso e de
+ * tela sao deste iPhone, nao da conta.
+ */
+const SEMPRE_NO_APARELHO = new Set<keyof Api>(['preferencias', 'gravarPreferencia']);
+
+export const api: Api = new Proxy(apiLocal, {
+  get(local, chave: string | symbol) {
+    const nome = chave as keyof Api;
+    if (!noServidor() || SEMPRE_NO_APARELHO.has(nome)) return local[nome];
+    const doServidor = apiRemota[nome];
+    if (doServidor) return doServidor;
+    // Copia de seguranca e "levar para outro iPhone" sao do banco do aparelho.
+    return () =>
+      Promise.reject(
+        new ApiError('SO_NO_APARELHO', 'Isto so existe no modo "Neste iPhone", nao num servidor.'),
+      );
+  },
+});
+
+/** Login, cadastro e sair: so existem no servidor. */
+export const conta = {
+  estado: remoto(web.authEstado),
+  entrar: remoto((email: string, senha: string) => web.entrar({ email, senha, app: true })),
+  cadastro: remoto((corpo: { nome: string; email: string; senha: string; convite?: string }) =>
+    web.cadastro({ ...corpo, app: true }),
+  ),
+  sair: remoto(web.sair),
 };
 
 export { generateJson };

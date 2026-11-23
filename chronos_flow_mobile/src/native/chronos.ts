@@ -35,6 +35,9 @@ export interface ResumoDoDia {
 }
 
 interface ChronosNativePlugin {
+  guardarSegredo(dados: { chave: string; valor: string }): Promise<void>;
+  lerSegredo(dados: { chave: string }): Promise<{ valor: string | null }>;
+  apagarSegredo(dados: { chave: string }): Promise<void>;
   iniciarFoco(dados: FocoAtivo): Promise<{ ativo: boolean }>;
   atualizarFoco(dados: Partial<FocoAtivo> & { nodeId: string }): Promise<{ ativo: boolean }>;
   encerrarFoco(dados: { nodeId?: string }): Promise<{ ativo: boolean }>;
@@ -284,4 +287,34 @@ export const sistema = {
   microfone: () => tentar('ler a permissao do microfone', () => plugin.estadoDoMicrofone()),
   vibrar: (tipo: 'leve' | 'medio' | 'sucesso' = 'leve') =>
     tentar('vibrar', () => plugin.vibrar({ tipo })),
+};
+
+/**
+ * Cofre para o login dos servidores (Keychain no iPhone). Fora do aparelho —
+ * o `npm run dev` no navegador — cai no localStorage, que so existe para
+ * desenvolver: la nao ha Keychain.
+ *
+ * Aqui o erro NAO e engolido como no resto deste arquivo: perder um token em
+ * silencio deixaria o app logado na tela e deslogado no servidor.
+ */
+const PREFIXO_DO_COFRE = 'chronos.cofre.';
+export const cofre = {
+  guardar: async (chave: string, valor: string): Promise<void> => {
+    if (!noAparelho()) {
+      localStorage.setItem(PREFIXO_DO_COFRE + chave, valor);
+      return;
+    }
+    await plugin.guardarSegredo({ chave, valor });
+  },
+  ler: async (chave: string): Promise<string | null> => {
+    if (!noAparelho()) return localStorage.getItem(PREFIXO_DO_COFRE + chave);
+    return (await plugin.lerSegredo({ chave })).valor ?? null;
+  },
+  apagar: async (chave: string): Promise<void> => {
+    if (!noAparelho()) {
+      localStorage.removeItem(PREFIXO_DO_COFRE + chave);
+      return;
+    }
+    await plugin.apagarSegredo({ chave });
+  },
 };
