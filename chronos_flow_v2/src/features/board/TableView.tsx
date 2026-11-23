@@ -11,7 +11,6 @@ import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { NewSpaceProjectDialog } from '@/components/NewSpaceProjectDialog';
 import { useTimelineStore } from '@/stores/timelineStore';
-import { DetailPane } from '@/features/timeline/DetailPane';
 import { BoardToolbar } from './BoardToolbar';
 import { useBoardNodes, useBoardUi } from './useBoardNodes';
 import {
@@ -36,8 +35,7 @@ import {
 const GRID = 'minmax(280px,1fr) 44px 160px 140px 170px 90px 110px 160px';
 const COLUMNS = ['Tarefa', '', 'Responsavel', 'Status', 'Prazo', 'Estimativa', 'Criticidade', 'Progresso'];
 
-export function TableView({ onOpenWidget }: { onOpenWidget: (node?: NodeDTO | null) => void }) {
-  const selectedId = useTimelineStore((s) => s.selectedId);
+export function TableView() {
   const [newProject, setNewProject] = useState(false);
   const board = useBoardNodes();
   const ui = useBoardUi();
@@ -93,7 +91,6 @@ export function TableView({ onOpenWidget }: { onOpenWidget: (node?: NodeDTO | nu
           </div>
         </div>
 
-        {selectedId && <DetailPane nodeId={selectedId} onOpenWidget={onOpenWidget} />}
       </div>
 
       <NewSpaceProjectDialog

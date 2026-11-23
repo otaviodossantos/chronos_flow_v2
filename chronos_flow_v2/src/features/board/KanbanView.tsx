@@ -7,7 +7,6 @@ import { cn } from '@/lib/utils';
 import { formatDuration, formatShortDate } from '@/lib/format';
 import { NewSpaceProjectDialog } from '@/components/NewSpaceProjectDialog';
 import { useTimelineStore } from '@/stores/timelineStore';
-import { DetailPane } from '@/features/timeline/DetailPane';
 import { BoardToolbar } from './BoardToolbar';
 import { boardQueryKey, useBoardNodes } from './useBoardNodes';
 import {
@@ -34,7 +33,7 @@ import {
 const DONE_WINDOW_DAYS = 7;
 const DRAG_TYPE = 'application/x-chronos-node';
 
-export function KanbanView({ onOpenWidget }: { onOpenWidget: (node?: NodeDTO | null) => void }) {
+export function KanbanView() {
   const selectedId = useTimelineStore((s) => s.selectedId);
   const select = useTimelineStore((s) => s.select);
   const conclusao = useTimelineStore((s) => s.conclusao);
@@ -180,7 +179,6 @@ export function KanbanView({ onOpenWidget }: { onOpenWidget: (node?: NodeDTO | n
           })}
         </div>
 
-        {selectedId && <DetailPane nodeId={selectedId} onOpenWidget={onOpenWidget} />}
       </div>
 
       <NewSpaceProjectDialog
@@ -224,7 +222,8 @@ function KanbanCard({
       onDragEnd={onDragEnd}
       onClick={() => openNode(node.id)}
       className={cn(
-        'cursor-grab rounded-md border bg-card p-2.5 shadow-sm transition-colors hover:border-foreground/30 active:cursor-grabbing',
+        // min-w-0 + overflow-hidden: nada dentro do cartao passa da largura da coluna.
+        'min-w-0 cursor-grab overflow-hidden rounded-md border bg-card p-2.5 shadow-sm transition-colors hover:border-foreground/30 active:cursor-grabbing',
         selected && 'ring-2 ring-ring',
       )}
       style={{ borderLeft: `3px solid ${color}` }}
@@ -234,11 +233,19 @@ function KanbanCard({
           {crumbs.join(' › ')}
         </div>
       )}
-      <div className={cn('text-sm font-medium leading-snug', done && 'text-muted-foreground line-through')}>
+      {/* Nome longo, ou com palavra sem espaco (link, nome colado), quebra em
+          qualquer ponto e para em 3 linhas; o nome inteiro fica no title. */}
+      <div
+        title={node.title}
+        className={cn(
+          'line-clamp-3 text-sm font-medium leading-snug [overflow-wrap:anywhere]',
+          done && 'text-muted-foreground line-through',
+        )}
+      >
         {node.title}
       </div>
 
-      <div className="mt-2 flex items-center gap-2 text-[11px]">
+      <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
         {node.assignee && <Avatar member={node.assignee} size={18} />}
         {node.due_date && (
           <span className={cn('flex items-center gap-1', deadlineTone(node))}>
