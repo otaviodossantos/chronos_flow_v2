@@ -173,6 +173,28 @@ export interface LifeSummary {
   };
 }
 
+/** O que a tela de entrada precisa saber antes de mostrar o formulario. */
+export interface AuthEstado {
+  autenticado: boolean;
+  usuario: { id: string; name: string; email: string | null } | null;
+  /** Nenhuma conta tem senha ainda: o proximo cadastro vira o dono dos dados existentes. */
+  primeiroAcesso: boolean;
+  /** O servidor so aceita cadastro com o codigo de convite (CHRONOS_CONVITE). */
+  conviteExigido: boolean;
+  /** Da para criar conta agora, daqui (primeiro acesso local, ou convite configurado). */
+  cadastroAberto: boolean;
+  /** Por que nao da para criar a primeira conta daqui, quando for o caso. */
+  avisoCadastro: string | null;
+}
+
+export interface ApiTokenDTO {
+  id: string;
+  name: string;
+  prefix: string;
+  created_at: string;
+  last_used_at: string | null;
+}
+
 export interface ApiError {
   error: { code: string; message: string; details?: unknown };
 }

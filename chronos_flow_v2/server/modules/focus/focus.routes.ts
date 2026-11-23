@@ -6,6 +6,7 @@ import { num, toNodeDTO } from '../../lib/serialize.js';
 import { focusScore, rootCriticality, projectProgress, startOfDay } from '../../domain/impact.js';
 import { blockedNodeIds } from '../../domain/dependencies.js';
 import { simulateSchema } from '../../../shared/schemas/index.js';
+import { garantirDono } from '../../lib/dono.js';
 import type { FocusItem } from '../../../shared/types.js';
 
 const router = Router();
@@ -140,6 +141,7 @@ router.post(
   '/simulate',
   asyncHandler(async (req, res) => {
     const { nodeIds } = simulateSchema.parse(req.body);
+    await garantirDono('node', nodeIds);
     const nodes = await prisma.node.findMany({
       where: { id: { in: nodeIds } },
       select: { id: true, path: true, root_impact: true, progress: true, title: true },

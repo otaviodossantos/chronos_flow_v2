@@ -11,11 +11,20 @@ import type {
   TaskTemplateDTO,
   NodeUpdateDTO,
   SetStatusResult,
+  AuthEstado,
+  ApiTokenDTO,
 } from '@shared/types';
 import type { AiPlan } from '@shared/schemas/index';
 import type { Pacote, ResumoDoPacote } from '@shared/transferencia';
 
 const BASE = '/api';
+
+/**
+ * Disparado quando a API responde que a sessao acabou (expirou, foi
+ * encerrada em outro aparelho, senha trocada). A porteira do app escuta e
+ * volta para a tela de entrada.
+ */
+export const SESSAO_EXPIRADA = 'chronos:sessao-expirada';
 
 export class ApiError extends Error {
   constructor(
@@ -36,6 +45,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     const err = body?.error;
+    if (res.status === 401 && err?.code === 'NAO_AUTENTICADO') {
+      window.dispatchEvent(new Event(SESSAO_EXPIRADA));
+    }
     throw new ApiError(
       err?.code ?? 'INTERNAL',
       err?.message ?? `Falha na requisicao (${res.status}).`,
@@ -104,6 +116,25 @@ export interface RiskRow {
 }
 
 export const api = {
+  authEstado: () => request<AuthEstado>('/auth/estado'),
+  cadastro: (body: { nome: string; email: string; senha: string; convite?: string }) =>
+    request<AuthEstado>('/auth/cadastro', { method: 'POST', body: JSON.stringify(body) }),
+  entrar: (body: { email: string; senha: string }) =>
+    request<AuthEstado>('/auth/entrar', { method: 'POST', body: JSON.stringify(body) }),
+  sair: () => request<AuthEstado>('/auth/sair', { method: 'POST' }),
+  trocarSenha: (atual: string, nova: string) =>
+    request<{ trocada: boolean; sessoesEncerradas: number; tokensRevogados: number }>('/auth/senha', {
+      method: 'POST',
+      body: JSON.stringify({ atual, nova }),
+    }),
+  tokens: () => request<ApiTokenDTO[]>('/auth/tokens'),
+  criarToken: (nome: string) =>
+    request<ApiTokenDTO & { token: string }>('/auth/tokens', {
+      method: 'POST',
+      body: JSON.stringify({ nome }),
+    }),
+  revogarToken: (id: string) => request<{ deleted: boolean }>(`/auth/tokens/${id}`, { method: 'DELETE' }),
+
   tree: (params: {
     rootId?: string;
     spaceId?: string;

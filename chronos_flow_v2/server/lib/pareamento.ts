@@ -3,10 +3,10 @@ import { randomInt, createHash, timingSafeEqual } from 'node:crypto';
 /**
  * O codigo de pareamento da transferencia.
  *
- * O resto da API e protegido pelo `CHRONOS_ACCESS_TOKEN`, que e um segredo
- * longo digitado uma vez num `.env`. Para mandar os dados ao iPhone isso seria
- * atrito demais — e entregar o token ao celular daria a ele a API inteira, nao
- * so a transferencia.
+ * O resto da API pede login. Fazer login no iPhone so para mandar os dados
+ * seria atrito demais — e entregar a sessao ao celular daria a ele a API
+ * inteira, nao so a transferencia. O codigo vale para a conta de quem o
+ * liberou, e so para ela.
  *
  * Entao a transferencia tem a sua propria porta: seis digitos que o desktop
  * mostra na tela quando voce clica em liberar, valem poucos minutos, servem
@@ -21,6 +21,8 @@ interface Pareamento {
   codigo: string;
   expiraEm: number;
   restantes: number;
+  /** Conta de quem clicou em liberar: o celular le e escreve so nela. */
+  userId: string;
 }
 
 let atual: Pareamento | null = null;
@@ -30,14 +32,26 @@ const digests = (a: string, b: string) => [
   createHash('sha256').update(b).digest(),
 ];
 
-export function liberar(): { codigo: string; expiraEm: string } {
+/**
+ * Um codigo por vez no servidor. Outra conta nao sobrescreve o codigo aberto
+ * de alguem (devolve null) — so quem o liberou pode gerar outro ou fecha-lo.
+ */
+export function liberar(userId: string): { codigo: string; expiraEm: string } | null {
+  if (liberado() && atual!.userId !== userId) return null;
   const codigo = String(randomInt(0, 1_000_000)).padStart(6, '0');
-  atual = { codigo, expiraEm: Date.now() + VALIDADE_MS, restantes: TENTATIVAS };
+  atual = { codigo, expiraEm: Date.now() + VALIDADE_MS, restantes: TENTATIVAS, userId };
   return { codigo, expiraEm: new Date(atual.expiraEm).toISOString() };
 }
 
-export function fechar(): void {
+/** Sem `userId`: fecha de qualquer jeito (uso interno, depois de transferir). */
+export function fechar(userId?: string): void {
+  if (userId && atual && atual.userId !== userId) return;
   atual = null;
+}
+
+/** Dono do codigo liberado agora, para quem acabou de passar em `conferir`. */
+export function dono(): string | null {
+  return atual?.userId ?? null;
 }
 
 export function liberado(): boolean {

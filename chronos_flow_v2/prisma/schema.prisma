@@ -31,6 +31,11 @@ enum TrainingLevel {
 model User {
   id                       String   @id @default(uuid())
   name                     String
+  /// Login. Nulo so no usuario antigo de antes das contas, ate alguem
+  /// reivindica-lo no primeiro acesso.
+  email                    String?  @unique
+  /// scrypt (ver server/lib/senha.ts). Nunca sai do servidor nem vai no pacote.
+  password_hash            String?
   birth_date               DateTime @default("1990-01-01T00:00:00.000Z")
   life_expectancy          Int      @default(75)
   daily_focus_goal_minutes Int      @default(240)
@@ -46,8 +51,42 @@ model User {
   members   Member[]
   backlog   BacklogItem[]
   templates TaskTemplate[]
+  sessions   Session[]
+  api_tokens ApiToken[]
 
   @@map("users")
+}
+
+/// Sessao de navegador. Guarda so o hash do token que vai no cookie: quem ler
+/// o banco nao consegue se passar por ninguem.
+model Session {
+  id           String   @id @default(uuid())
+  user_id      String
+  user         User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  token_hash   String   @unique
+  user_agent   String?
+  created_at   DateTime @default(now())
+  last_seen_at DateTime @default(now())
+  expires_at   DateTime
+
+  @@index([user_id])
+  @@map("sessions")
+}
+
+/// Token de API pessoal, para o MCP e scripts. Aparece uma vez na tela; aqui
+/// fica so o hash e o comeco, para a lista dizer qual e qual.
+model ApiToken {
+  id           String    @id @default(uuid())
+  user_id      String
+  user         User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  name         String
+  token_hash   String    @unique
+  prefix       String
+  created_at   DateTime  @default(now())
+  last_used_at DateTime?
+
+  @@index([user_id])
+  @@map("api_tokens")
 }
 
 model Space {

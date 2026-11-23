@@ -49,6 +49,16 @@ async function main() {
     `v1: ${projects.length} projetos, ${members.length} membros, ${tasks.length} tarefas.`,
   );
 
+  // Como o seed: a migracao apaga a v2 inteira, contas inclusive.
+  const contas = await v2.user.count({ where: { password_hash: { not: null } } });
+  if (contas > 0 && process.env.MIGRAR_APAGANDO_CONTAS !== 'sim') {
+    console.error(
+      `A v2 tem ${contas} conta(s) com login e a migracao apagaria todas.\n` +
+        'Se e isso mesmo, rode com MIGRAR_APAGANDO_CONTAS=sim.',
+    );
+    process.exit(1);
+  }
+
   console.log('Limpando a v2...');
   await v2.nodeActivity.deleteMany();
   await v2.progressSnapshot.deleteMany();

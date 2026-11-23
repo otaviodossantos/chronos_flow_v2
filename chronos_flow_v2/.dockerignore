@@ -1,0 +1,13 @@
+node_modules
+dist
+dist-server
+dist-electron
+dist-mcp
+release
+coverage
+.env
+.env.*
+*.log
+.DS_Store
+exemplos_layout
+deploy

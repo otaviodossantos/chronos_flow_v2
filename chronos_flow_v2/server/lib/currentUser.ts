@@ -1,25 +1,17 @@
-import { prisma } from '../db/client.js';
+import { AppError } from './errors.js';
+import { contexto } from './sessao.js';
 
 /**
- * App local single-user: ha exatamente um usuario, criado no primeiro acesso.
- * Isolado aqui para que trocar por autenticacao mais tarde toque um arquivo so.
+ * Dono da requisicao em curso: quem o porteiro autenticou (ver `sessao.ts`).
+ *
+ * Nao ha mais "na duvida, o primeiro usuario do banco". Com varias contas
+ * esse atalho entregaria os dados de uma pessoa a outra, e ele disparava
+ * justamente quando algo dava errado — um callback que perdeu o contexto.
+ * Scripts e tarefas de inicializacao passam o id da conta explicitamente.
  */
-let cached: string | null = null;
-
 export async function currentUserId(): Promise<string> {
-  if (cached) return cached;
-  const existing = await prisma.user.findFirst({ orderBy: { created_at: 'asc' } });
-  if (existing) {
-    cached = existing.id;
-    return existing.id;
-  }
-  const created = await prisma.user.create({
-    data: { name: 'Voce', birth_date: new Date('1990-01-01T00:00:00.000Z') },
-  });
-  cached = created.id;
-  return created.id;
-}
-
-export function resetUserCache() {
-  cached = null;
+  const ctx = contexto.getStore();
+  if (ctx?.userId) return ctx.userId;
+  if (ctx) throw new AppError('NAO_AUTENTICADO', 'Entre na sua conta para continuar.');
+  throw new Error('currentUserId() chamado fora de uma requisicao: passe o id da conta explicitamente.');
 }

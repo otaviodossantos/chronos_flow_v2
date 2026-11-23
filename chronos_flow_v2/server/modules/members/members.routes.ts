@@ -5,7 +5,11 @@ import { currentUserId } from '../../lib/currentUser.js';
 import { createMemberSchema } from '../../../shared/schemas/index.js';
 import { toMemberDTO } from '../../lib/serialize.js';
 
+import { donoDoParam, garantirDono } from '../../lib/dono.js';
+
 const router = Router();
+
+router.param('id', donoDoParam('member'));
 
 /**
  * Carga do membro: minutos abertos contra a capacidade semanal declarada,
@@ -72,6 +76,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const userId = await currentUserId();
     const { space_ids, ...body } = createMemberSchema.parse(req.body);
+    await garantirDono('space', space_ids);
     const created = await prisma.member.create({
       data: {
         ...body,
@@ -91,6 +96,7 @@ router.patch(
   '/:id',
   asyncHandler(async (req, res) => {
     const { space_ids, ...body } = createMemberSchema.partial().parse(req.body);
+    await garantirDono('space', space_ids);
     if (space_ids) {
       await prisma.spaceMember.deleteMany({ where: { member_id: req.params.id } });
       if (space_ids.length > 0) {

@@ -109,14 +109,28 @@ describe('codigo de pareamento', () => {
   });
 
   it('aceita o codigo certo e recusa o errado', () => {
-    const { codigo } = pareamento.liberar();
+    const { codigo } = pareamento.liberar('conta-a')!;
     expect(codigo).toMatch(/^\d{6}$/);
     expect(pareamento.conferir('000000' === codigo ? '111111' : '000000')).toBe('incorreto');
     expect(pareamento.conferir(codigo)).toBe('ok');
   });
 
+  it('o codigo vale para a conta de quem liberou, e outra conta nao o toma', () => {
+    const primeiro = pareamento.liberar('conta-a')!;
+    expect(pareamento.dono()).toBe('conta-a');
+    // Outra conta nao sobrescreve nem fecha o codigo aberto de alguem.
+    expect(pareamento.liberar('conta-b')).toBeNull();
+    pareamento.fechar('conta-b');
+    expect(pareamento.dono()).toBe('conta-a');
+    expect(pareamento.conferir(primeiro.codigo)).toBe('ok');
+    // O dono pode gerar outro ou fechar.
+    expect(pareamento.liberar('conta-a')).not.toBeNull();
+    pareamento.fechar('conta-a');
+    expect(pareamento.dono()).toBeNull();
+  });
+
   it('morre depois de cinco tentativas erradas', () => {
-    const { codigo } = pareamento.liberar();
+    const { codigo } = pareamento.liberar('conta-a')!;
     const errado = codigo === '999999' ? '111111' : '999999';
     for (let i = 0; i < 4; i++) expect(pareamento.conferir(errado)).toBe('incorreto');
     expect(pareamento.conferir(errado)).toBe('esgotado');
@@ -127,7 +141,7 @@ describe('codigo de pareamento', () => {
   it('expira sozinho', () => {
     vi.useFakeTimers();
     try {
-      const { codigo } = pareamento.liberar();
+      const { codigo } = pareamento.liberar('conta-a')!;
       vi.advanceTimersByTime(5 * 60 * 1000 + 1000);
       expect(pareamento.conferir(codigo)).toBe('expirado');
       expect(pareamento.liberado()).toBe(false);
