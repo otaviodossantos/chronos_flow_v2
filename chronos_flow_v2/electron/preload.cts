@@ -37,6 +37,18 @@ contextBridge.exposeInMainWorld('chronos', {
   bounceDock: (type?: 'critical' | 'informational') =>
     ipcRenderer.send('chronos:bounce-dock', { type }),
 
+  // Servidor em uso. `atual` e `trocar` servem a qualquer tela; o resto, so a
+  // tela de escolha (o main recusa o que vier de outra pagina).
+  servidor: {
+    atual: () => ipcRenderer.invoke('chronos:servidor-atual'),
+    trocar: () => ipcRenderer.invoke('chronos:trocar-servidor'),
+    listar: () => ipcRenderer.invoke('chronos:servidores'),
+    escolher: (url: string) => ipcRenderer.invoke('chronos:escolher-servidor', url),
+    adicionar: (dados: { url: string; nome?: string }) =>
+      ipcRenderer.invoke('chronos:adicionar-servidor', dados),
+    remover: (url: string) => ipcRenderer.invoke('chronos:remover-servidor', url),
+  },
+
   onNavigateToNode: (cb: (nodeId: string) => void) => {
     const handler = (_e: unknown, nodeId: string) => cb(nodeId);
     ipcRenderer.on('chronos:navigate-node', handler);

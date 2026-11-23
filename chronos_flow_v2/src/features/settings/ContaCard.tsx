@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AUTH_KEY, useSair } from '@/features/auth/AuthGate';
+import { ServidorAtual } from '@/features/auth/ServidorAtual';
 
 /** Conta, senha e os tokens que o MCP usa para falar em nome desta conta. */
 export function ContaCard() {
@@ -34,6 +35,7 @@ export function ContaCard() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        <ServidorAtual className="justify-start" />
         <TrocarSenha />
         <TokensDeApi />
       </CardContent>

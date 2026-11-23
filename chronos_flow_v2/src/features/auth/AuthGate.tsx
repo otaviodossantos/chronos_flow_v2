@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useTimelineStore } from '@/stores/timelineStore';
 import { useBoardUi } from '@/features/board/useBoardNodes';
+import { ServidorAtual } from './ServidorAtual';
 
 export const AUTH_KEY = ['auth'] as const;
 
@@ -148,6 +149,9 @@ function EntradaPage({
           <span className="text-lg font-semibold">Chronos Flow</span>
           <span className="rounded bg-secondary px-1 font-mono text-[10px] text-muted-foreground">v2</span>
         </div>
+
+        {/* Qual servidor e este login: no app instalado, da para trocar aqui. */}
+        <ServidorAtual className="mb-4" />
 
         {estado.avisoCadastro && (
           <p className="mb-4 rounded-md border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-xs">

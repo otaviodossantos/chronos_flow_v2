@@ -206,6 +206,21 @@ do prazo a cada leitura.
 
 ---
 
+## App desktop e servidores
+
+O app instalado pergunta, na primeira abertura, **em qual servidor do Chronos
+entrar**: "Este computador" (o servidor embutido, com os dados so nesta
+maquina) ou um servidor na rede, como `https://flow.suaempresa.com.br`. Cada
+servidor tem as proprias contas, e o login fica guardado em cada um.
+
+- Trocar depois: "Trocar" na tela de entrada, em Configuracoes > Conta e
+  acesso, ou "Trocar servidor..." no icone da barra de menus.
+- Endereco novo precisa ser `https://` (so `localhost` pode ser `http`), e o
+  app confere que ali responde um Chronos antes de salvar.
+- A janela carrega a tela publicada pelo proprio servidor: API e tela na mesma
+  origem, sem cookie entre dominios. Link para fora abre no navegador.
+- O servidor embutido so sobe quando "Este computador" e o escolhido.
+
 ## Atalhos (Electron)
 
 | Atalho | Acao |
