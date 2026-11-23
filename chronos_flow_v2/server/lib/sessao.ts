@@ -13,9 +13,21 @@ import { hashSegredo, novoSegredo } from './senha.js';
  * inclusive atraves dos `await`.
  */
 interface Contexto {
+  /** De quem sao os dados desta requisicao. */
   userId?: string;
   /** Como entrou: pela tela (cookie) ou por token de API (MCP, scripts). */
   via?: 'sessao' | 'token';
+  /** Admin agindo no espaco de `userId`: quem ele e de verdade. */
+  adminId?: string;
+  adminNome?: string;
+}
+
+/** Quem esta por tras da requisicao, para a resolucao de sessao/token. */
+export interface Quem {
+  userId: string;
+  via: 'sessao' | 'token';
+  adminId?: string;
+  adminNome?: string;
 }
 
 export const contexto = new AsyncLocalStorage<Contexto>();
@@ -25,11 +37,28 @@ export const abrirContexto: RequestHandler = (_req, _res, next) => {
   contexto.run({}, next);
 };
 
-export function definirUsuario(userId: string, via: 'sessao' | 'token') {
+export function definirUsuario(quem: Quem) {
   const atual = contexto.getStore();
   if (!atual) throw new Error('definirUsuario fora de uma requisicao');
-  atual.userId = userId;
-  atual.via = via;
+  atual.userId = quem.userId;
+  atual.via = quem.via;
+  atual.adminId = quem.adminId;
+  atual.adminNome = quem.adminNome;
+}
+
+/** A pessoa de verdade por tras da requisicao (o admin, quando ele atua por outra conta). */
+export function pessoaReal(): string | undefined {
+  const c = contexto.getStore();
+  return c?.adminId ?? c?.userId;
+}
+
+/**
+ * Nome que assina a atividade e as atualizacoes. Quando o admin age no espaco
+ * de outra conta, fica registrado que foi ele — nunca em nome da pessoa.
+ */
+export function assinaturaDoAdmin(): string | null {
+  const c = contexto.getStore();
+  return c?.adminId ? `${c.adminNome ?? 'Admin'} (admin)` : null;
 }
 
 /**
@@ -115,8 +144,35 @@ function gravarCookie(req: Request, res: Response, valor: string, maxAgeS: numbe
   res.append('Set-Cookie', partes.join('; '));
 }
 
-export async function abrirSessao(req: Request, res: Response, userId: string) {
-  const token = novoSegredo();
+/** Tokens de API (MCP, scripts) comecam assim; qualquer outro Bearer e sessao de app. */
+export const PREFIXO_TOKEN_API = 'chr_';
+
+/**
+ * A sessao desta requisicao: no navegador vem no cookie; no app do celular,
+ * que fala com o servidor de outra origem e nao guarda cookie, vem no
+ * `Authorization: Bearer`. As duas sao a mesma coisa — uma linha em
+ * `sessions` —, entao sair, trocar a senha e o bloqueio valem igual.
+ */
+function sessaoNoBearer(req: Request): string | null {
+  const bearer = lerBearer(req.get('authorization'));
+  return bearer && !bearer.startsWith(PREFIXO_TOKEN_API) ? bearer : null;
+}
+
+export function tokenDaSessao(req: Request): string | null {
+  return sessaoNoBearer(req) ?? lerCookie(req.get('cookie'), COOKIE);
+}
+
+/**
+ * Abre a sessao. No navegador ela vai no cookie; com `app`, o token volta para
+ * quem chamou (o app guarda no Keychain) e nenhum cookie e gravado.
+ */
+export async function abrirSessao(
+  req: Request,
+  res: Response,
+  userId: string,
+  { app = false } = {},
+): Promise<string> {
+  const token = novoSegredo(app ? 'cs_' : '');
   await prisma.session.create({
     data: {
       user_id: userId,
@@ -125,13 +181,15 @@ export async function abrirSessao(req: Request, res: Response, userId: string) {
       expires_at: new Date(Date.now() + DURACAO_MS),
     },
   });
-  gravarCookie(req, res, token, DURACAO_MS / 1000);
+  if (!app) gravarCookie(req, res, token, DURACAO_MS / 1000);
+  return token;
 }
 
 export async function encerrarSessao(req: Request, res: Response) {
-  const token = lerCookie(req.get('cookie'), COOKIE);
+  const doApp = sessaoNoBearer(req);
+  const token = doApp ?? lerCookie(req.get('cookie'), COOKIE);
   if (token) await prisma.session.deleteMany({ where: { token_hash: hashSegredo(token) } });
-  gravarCookie(req, res, '', 0);
+  if (!doApp) gravarCookie(req, res, '', 0);
 }
 
 /**
@@ -142,27 +200,37 @@ export async function resolverUsuario(
   req: Request,
   res: Response,
   { aceitarToken = true } = {},
-): Promise<{ userId: string; via: 'sessao' | 'token' } | null> {
-  const bearer = aceitarToken ? lerBearer(req.get('authorization')) : null;
-  if (bearer) {
+): Promise<Quem | null> {
+  const bearer = lerBearer(req.get('authorization'));
+  if (bearer?.startsWith(PREFIXO_TOKEN_API) && aceitarToken) {
     const token = await prisma.apiToken.findUnique({
       where: { token_hash: hashSegredo(bearer) },
-      select: { id: true, user_id: true, last_used_at: true },
+      select: { id: true, user_id: true, last_used_at: true, user: { select: { bloqueado_em: true } } },
     });
-    if (!token) return null;
+    // Conta bloqueada: o token para de valer junto com o resto.
+    if (!token || token.user.bloqueado_em) return null;
     if (!token.last_used_at || Date.now() - token.last_used_at.getTime() > 60_000) {
       await prisma.apiToken.update({ where: { id: token.id }, data: { last_used_at: new Date() } });
     }
     return { userId: token.user_id, via: 'token' };
   }
 
-  const valor = lerCookie(req.get('cookie'), COOKIE);
+  const doApp = sessaoNoBearer(req);
+  const valor = doApp ?? lerCookie(req.get('cookie'), COOKIE);
   if (!valor) return null;
   const sessao = await prisma.session.findUnique({
     where: { token_hash: hashSegredo(valor) },
-    select: { id: true, user_id: true, expires_at: true, last_seen_at: true },
+    select: {
+      id: true,
+      user_id: true,
+      expires_at: true,
+      last_seen_at: true,
+      atuando_como_id: true,
+      user: { select: { name: true, papel: true, bloqueado_em: true } },
+      atuando_como: { select: { id: true } },
+    },
   });
-  if (!sessao) return null;
+  if (!sessao || sessao.user.bloqueado_em) return null;
   if (sessao.expires_at.getTime() < Date.now()) {
     await prisma.session.delete({ where: { id: sessao.id } }).catch(() => {});
     return null;
@@ -174,7 +242,19 @@ export async function resolverUsuario(
       where: { id: sessao.id },
       data: { last_seen_at: new Date(), expires_at: new Date(Date.now() + DURACAO_MS) },
     });
-    gravarCookie(req, res, valor, DURACAO_MS / 1000);
+    // O app nao tem cookie: o token dele e o mesmo, so o prazo no banco anda.
+    if (!doApp) gravarCookie(req, res, valor, DURACAO_MS / 1000);
+  }
+
+  // Admin no espaco de outra conta. So vale enquanto ele continuar admin; se
+  // perdeu o papel, a sessao volta sozinha a ser so dele.
+  if (sessao.atuando_como_id && sessao.user.papel === 'ADMIN' && sessao.atuando_como) {
+    return {
+      userId: sessao.atuando_como_id,
+      via: 'sessao',
+      adminId: sessao.user_id,
+      adminNome: sessao.user.name,
+    };
   }
   return { userId: sessao.user_id, via: 'sessao' };
 }
@@ -191,7 +271,7 @@ export const exigeLogin: RequestHandler = (req, res, next) => {
         next(new AppError('NAO_AUTENTICADO', 'Entre na sua conta para continuar.'));
         return;
       }
-      definirUsuario(quem.userId, quem.via);
+      definirUsuario(quem);
       next();
     })
     .catch(next);
@@ -203,9 +283,40 @@ export const exigeLogin: RequestHandler = (req, res, next) => {
  * do MCP — nao pode criar outros tokens, trocar a senha nem levar a base.
  */
 export const somenteSessao: RequestHandler = (_req, _res, next) => {
-  if (contexto.getStore()?.via === 'token') {
+  const c = contexto.getStore();
+  if (c?.via === 'token') {
     next(new AppError('SO_PELA_TELA', 'Esta acao so pode ser feita pela tela do app, nao com token de API.'));
     return;
   }
+  // No espaco de outra conta, o admin cuida dos projetos, nao da conta da
+  // pessoa: senha, tokens, apagar tudo e transferir continuam so dela.
+  if (c?.adminId) {
+    next(
+      new AppError(
+        'SO_PELA_TELA',
+        'Acao da propria conta: volte para o seu espaco para fazer isso. Contas de outros se gerenciam na tela de Admin.',
+      ),
+    );
+    return;
+  }
   next();
+};
+
+/** So admin (a pessoa de verdade, mesmo agindo no espaco de outra conta). */
+export const exigeAdmin: RequestHandler = (_req, _res, next) => {
+  const id = pessoaReal();
+  if (!id) {
+    next(new AppError('NAO_AUTENTICADO', 'Entre na sua conta para continuar.'));
+    return;
+  }
+  prisma.user
+    .findUnique({ where: { id }, select: { papel: true, bloqueado_em: true } })
+    .then((u) => {
+      if (!u || u.papel !== 'ADMIN' || u.bloqueado_em) {
+        next(new AppError('SO_ADMIN', 'So administradores podem fazer isso.'));
+        return;
+      }
+      next();
+    })
+    .catch(next);
 };

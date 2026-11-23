@@ -178,4 +178,30 @@ router.post(
   }),
 );
 
+/**
+ * O que ja fechou hoje, para o widget do iPhone. `desde` e a meia-noite do
+ * aparelho: o servidor pode estar em outro fuso, e "hoje" e o de quem olha.
+ */
+router.get(
+  '/hoje',
+  asyncHandler(async (req, res) => {
+    const userId = await currentUserId();
+    const desde = new Date(String(req.query.desde ?? ''));
+    const inicio = Number.isNaN(desde.getTime()) ? startOfDay(new Date()) : desde;
+    const [fechadas, perfil] = await Promise.all([
+      prisma.node.findMany({
+        where: { user_id: userId, completed_at: { gte: inicio }, children: { none: {} } },
+        select: { estimated_minutes: true, root_impact: true },
+      }),
+      prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { daily_focus_goal_minutes: true } }),
+    ]);
+    res.json({
+      concluidasHoje: fechadas.length,
+      minutosFocados: fechadas.reduce((s, f) => s + (f.estimated_minutes ?? 0), 0),
+      metaDeMinutos: perfil.daily_focus_goal_minutes,
+      impactoDoDia: Math.round(fechadas.reduce((s, f) => s + num(f.root_impact), 0) * 100) / 100,
+    });
+  }),
+);
+
 export default router;

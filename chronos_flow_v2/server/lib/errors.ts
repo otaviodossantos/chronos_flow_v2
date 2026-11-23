@@ -17,6 +17,8 @@ export type ErrorCode =
   | 'VARIAS_CONTAS'
   | 'SO_PELA_TELA'
   | 'PAREAMENTO_OCUPADO'
+  | 'SO_ADMIN'
+  | 'CONTA_BLOQUEADA'
   | 'INTERNAL';
 
 const STATUS: Record<ErrorCode, number> = {
@@ -39,6 +41,8 @@ const STATUS: Record<ErrorCode, number> = {
   VARIAS_CONTAS: 409,
   SO_PELA_TELA: 403,
   PAREAMENTO_OCUPADO: 409,
+  SO_ADMIN: 403,
+  CONTA_BLOQUEADA: 403,
   INTERNAL: 500,
 };
 

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   GanttChartSquare, Target, Inbox, Users, BarChart3, Settings, Moon, Sun, Plus,
-  PanelLeftClose, PanelLeftOpen, LogOut,
+  PanelLeftClose, PanelLeftOpen, LogOut, ShieldCheck,
 } from 'lucide-react';
 import type { AuthEstado } from '@shared/types';
 import { AUTH_KEY, useSair } from '@/features/auth/AuthGate';
@@ -16,7 +16,7 @@ import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { NewSpaceProjectDialog, type NewKind } from '@/components/NewSpaceProjectDialog';
 
-export type Tab = 'timeline' | 'focus' | 'backlog' | 'team' | 'reports' | 'settings';
+export type Tab = 'timeline' | 'focus' | 'backlog' | 'team' | 'reports' | 'admin' | 'settings';
 
 const NAV: Array<{ id: Tab; label: string; icon: React.ReactNode }> = [
   // Timeline, Tabela e Kanban moram juntas aqui: o seletor fica no topo da tela.
@@ -101,7 +101,13 @@ export function Sidebar({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
             Workspace
           </div>
         )}
-        {NAV.map((item) =>
+        {[
+          ...NAV,
+          // So quem administra o servidor ve a aba (o servidor confere de novo).
+          ...(auth?.usuario?.papel === 'ADMIN'
+            ? [{ id: 'admin' as Tab, label: 'Admin', icon: <ShieldCheck className="h-4 w-4" /> }]
+            : []),
+        ].map((item) =>
           comDica(
             <button
               key={item.id}

@@ -15,13 +15,13 @@ import {
 import {
   abrirSessao,
   cliente,
-  COOKIE,
   daPropriaMaquina,
   encerrarSessao,
   exigeLogin,
-  lerCookie,
   resolverUsuario,
   somenteSessao,
+  tokenDaSessao,
+  type Quem,
 } from '../../lib/sessao.js';
 import {
   cadastroSchema,
@@ -60,8 +60,18 @@ const primeiroAcesso = async () =>
   (await prisma.user.count({ where: { password_hash: { not: null } } })) === 0;
 
 /** Pode criar conta agora, e se nao, por que. */
-function regraDeCadastro(req: Request, primeiro: boolean): { aberto: boolean; aviso: string | null } {
-  if (convite()) return { aberto: true, aviso: null };
+/** Algum convite individual ainda valido: a tela de entrada precisa oferecer o cadastro. */
+const haConviteAtivo = async () =>
+  (await prisma.convite.count({
+    where: { usado_em: null, revogado_em: null, expira_em: { gt: new Date() } },
+  })) > 0;
+
+function regraDeCadastro(
+  req: Request,
+  primeiro: boolean,
+  conviteAtivo = false,
+): { aberto: boolean; aviso: string | null } {
+  if (convite() || conviteAtivo) return { aberto: true, aviso: null };
   if (!primeiro) return { aberto: false, aviso: null };
   if (daPropriaMaquina(req)) return { aberto: true, aviso: null };
   return {
@@ -71,22 +81,48 @@ function regraDeCadastro(req: Request, primeiro: boolean): { aberto: boolean; av
   };
 }
 
-async function estado(req: Request, userId: string | null): Promise<AuthEstado> {
-  const [primeiro, usuario] = await Promise.all([
+async function estado(req: Request, quem: Quem | null): Promise<AuthEstado> {
+  const real = quem?.adminId ?? quem?.userId ?? null;
+  const [primeiro, conviteAtivo, usuario, alvo] = await Promise.all([
     primeiroAcesso(),
-    userId
-      ? prisma.user.findUnique({ where: { id: userId }, select: { id: true, name: true, email: true } })
+    haConviteAtivo(),
+    real
+      ? prisma.user.findUnique({
+          where: { id: real },
+          select: { id: true, name: true, email: true, papel: true },
+        })
+      : null,
+    quem?.adminId
+      ? prisma.user.findUnique({ where: { id: quem.userId }, select: { id: true, name: true, email: true } })
       : null,
   ]);
-  const regra = regraDeCadastro(req, primeiro);
+  const regra = regraDeCadastro(req, primeiro, conviteAtivo);
   return {
     autenticado: Boolean(usuario),
     usuario,
+    atuandoComo: alvo,
     primeiroAcesso: primeiro,
-    conviteExigido: Boolean(convite()),
+    conviteExigido: Boolean(convite()) || (conviteAtivo && !primeiro),
     cadastroAberto: regra.aberto,
     avisoCadastro: regra.aviso,
   };
+}
+
+/**
+ * Convite individual (link gerado pelo admin). Devolve o id se o token for de
+ * um convite valido para este e-mail; null se nao for convite individual.
+ */
+async function conviteIndividual(token: string | undefined, email: string) {
+  if (!token) return null;
+  const c = await prisma.convite.findUnique({ where: { token_hash: hashSegredo(token) } });
+  if (!c) return null;
+  if (c.usado_em) throw new AppError('CADASTRO_FECHADO', 'Este convite ja foi usado.');
+  if (c.revogado_em) throw new AppError('CADASTRO_FECHADO', 'Este convite foi revogado.');
+  if (c.expira_em.getTime() < Date.now()) throw new AppError('CADASTRO_FECHADO', 'Este convite expirou. Peca outro ao administrador.');
+  if (c.email && c.email !== email) {
+    throw new AppError('CADASTRO_FECHADO', 'Este convite e para outro e-mail.');
+  }
+  return c.id;
 }
 
 /**
@@ -107,7 +143,7 @@ router.get(
   '/estado',
   asyncHandler(async (req, res) => {
     const quem = await resolverUsuario(req, res, { aceitarToken: false });
-    res.json(await estado(req, quem?.userId ?? null));
+    res.json(await estado(req, quem));
   }),
 );
 
@@ -118,8 +154,15 @@ router.post(
     const body = cadastroSchema.parse(req.body);
     const primeiro = await primeiroAcesso();
 
-    if (convite()) {
+    // Primeiro o convite individual (link do admin); depois o codigo unico do
+    // .env; sem nenhum dos dois, so o primeiro acesso desta maquina.
+    const conviteId = await conviteIndividual(body.convite, body.email);
+    if (conviteId) {
+      // valido: segue
+    } else if (convite()) {
       if (!conviteConfere(body.convite)) throw new AppError('CADASTRO_FECHADO', 'Codigo de convite invalido.');
+    } else if (body.convite) {
+      throw new AppError('CADASTRO_FECHADO', 'Codigo de convite invalido.');
     } else {
       const regra = regraDeCadastro(req, primeiro);
       if (!regra.aberto) {
@@ -139,29 +182,50 @@ router.post(
       ? await prisma.user.findFirst({ where: { password_hash: null }, orderBy: { created_at: 'asc' } })
       : null;
 
-    let userId: string;
-    if (antigo) {
-      // Atomico: se duas pessoas cadastrarem ao mesmo tempo no primeiro
-      // acesso, so uma leva os dados; a outra recebe o cadastro fechado.
-      const { count } = await prisma.user.updateMany({
-        where: { id: antigo.id, password_hash: null },
-        data: { name: body.nome, email: body.email, password_hash },
-      });
-      if (count === 0) throw new AppError('CADASTRO_FECHADO', 'Outra pessoa acabou de criar a primeira conta.');
-      userId = antigo.id;
-    } else {
-      userId = (await prisma.user.create({ data: { name: body.nome, email: body.email, password_hash } })).id;
-    }
+    // A primeira conta do servidor e a administradora.
+    const papel = primeiro ? 'ADMIN' : 'MEMBRO';
 
-    await abrirSessao(req, res, userId);
-    res.status(201).json(await estado(req, userId));
+    const userId = await prisma.$transaction(async (tx) => {
+      // O convite individual e queimado na mesma transacao: dois cadastros
+      // com o mesmo link, ao mesmo tempo, nao passam os dois.
+      if (conviteId) {
+        const { count } = await tx.convite.updateMany({
+          where: { id: conviteId, usado_em: null, revogado_em: null },
+          data: { usado_em: new Date() },
+        });
+        if (count === 0) throw new AppError('CADASTRO_FECHADO', 'Este convite ja foi usado.');
+      }
+
+      let id: string;
+      if (antigo) {
+        // Atomico: se duas pessoas cadastrarem ao mesmo tempo no primeiro
+        // acesso, so uma leva os dados; a outra recebe o cadastro fechado.
+        const { count } = await tx.user.updateMany({
+          where: { id: antigo.id, password_hash: null },
+          data: { name: body.nome, email: body.email, password_hash, papel },
+        });
+        if (count === 0) throw new AppError('CADASTRO_FECHADO', 'Outra pessoa acabou de criar a primeira conta.');
+        id = antigo.id;
+      } else {
+        id = (await tx.user.create({ data: { name: body.nome, email: body.email, password_hash, papel } })).id;
+      }
+
+      if (conviteId) await tx.convite.update({ where: { id: conviteId }, data: { usado_por_id: id } });
+      return id;
+    });
+
+    const sessao = await abrirSessao(req, res, userId, { app: Boolean(body.app) });
+    res.status(201).json({
+      ...(await estado(req, { userId, via: 'sessao' })),
+      ...(body.app ? { tokenDoApp: sessao } : {}),
+    });
   }),
 );
 
 router.post(
   '/entrar',
   asyncHandler(async (req, res) => {
-    const { email, senha } = entrarSchema.parse(req.body);
+    const { email, senha, app } = entrarSchema.parse(req.body);
     // As duas contagens antes de qualquer await: uma rajada paralela nao
     // passa toda pela checagem antes da primeira falha ser registrada.
     const emailOk = porEmail.tentar(email);
@@ -173,10 +237,18 @@ router.post(
     if (!user) await gastarTempoDeConferencia(senha);
 
     if (!user || !ok) throw new AppError('CREDENCIAIS_INVALIDAS', 'E-mail ou senha incorretos.');
+    // Dito so depois da senha certa: quem nao tem a senha nao fica sabendo nem
+    // que a conta existe, muito menos que esta bloqueada.
+    if (user.bloqueado_em) {
+      throw new AppError('CONTA_BLOQUEADA', 'Esta conta esta bloqueada. Fale com o administrador.');
+    }
 
     porEmail.liberar(email);
-    await abrirSessao(req, res, user.id);
-    res.json(await estado(req, user.id));
+    const sessao = await abrirSessao(req, res, user.id, { app: Boolean(app) });
+    res.json({
+      ...(await estado(req, { userId: user.id, via: 'sessao' })),
+      ...(app ? { tokenDoApp: sessao } : {}),
+    });
   }),
 );
 
@@ -206,7 +278,7 @@ router.post(
 
     // Quem troca a senha por desconfianca quer derrubar o resto: os outros
     // aparelhos e os tokens de API (um token vazado sobreviveria a troca).
-    const desta = lerCookie(req.get('cookie'), COOKIE);
+    const desta = tokenDaSessao(req);
     const [, sessoes, tokens] = await prisma.$transaction([
       prisma.user.update({ where: { id: userId }, data: { password_hash: await hashSenha(nova) } }),
       prisma.session.deleteMany({

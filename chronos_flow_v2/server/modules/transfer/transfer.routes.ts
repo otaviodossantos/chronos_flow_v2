@@ -52,14 +52,18 @@ const exigeSessaoOuCodigo = asyncHandler(async (req, res, next) => {
   // Token de API nao serve: transferir leva a conta inteira (ver somenteSessao).
   const quem = await resolverUsuario(req, res, { aceitarToken: false });
   if (quem) {
-    definirUsuario(quem.userId, quem.via);
+    // Admin no espaco de outra conta nao leva nem substitui a base dela.
+    if (quem.adminId) {
+      throw new AppError('SO_PELA_TELA', 'Transferencia so da propria conta: volte para o seu espaco.');
+    }
+    definirUsuario(quem);
     return next();
   }
 
   const veredito = pareamento.conferir(req.get('x-chronos-pair'));
   const dono = pareamento.dono();
   if (veredito === 'ok' && dono) {
-    definirUsuario(dono, 'sessao');
+    definirUsuario({ userId: dono, via: 'sessao' });
     return next();
   }
   throw new AppError(
@@ -91,7 +95,7 @@ const DA_CONTA: Record<TabelaDoPacote, (userId: string) => Record<string, unknow
  * servidor) e a chave da IA, que e segredo — a tela de ajustes so a mostra
  * mascarada, e o pacote nao pode ser o atalho para le-la inteira.
  */
-const SO_NO_SERVIDOR = ['email', 'password_hash', 'gemini_api_key'];
+const SO_NO_SERVIDOR = ['email', 'password_hash', 'gemini_api_key', 'papel', 'bloqueado_em'];
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

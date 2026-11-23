@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../../db/client.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { currentUserId } from '../../lib/currentUser.js';
+import { AppError } from '../../lib/errors.js';
 import { somenteSessao } from '../../lib/sessao.js';
 import { num } from '../../lib/serialize.js';
 import { updateUserSchema, resetSchema } from '../../../shared/schemas/index.js';
@@ -30,6 +31,7 @@ router.get(
 
 router.patch(
   '/',
+  somenteSessao,
   asyncHandler(async (req, res) => {
     const userId = await currentUserId();
     const body = updateUserSchema.parse(req.body);
@@ -90,6 +92,19 @@ router.post(
   asyncHandler(async (req, res) => {
     const userId = await currentUserId();
     const { includeProfile } = resetSchema.parse(req.body);
+
+    // Apagar o proprio perfil sendo o ultimo admin deixaria o servidor sem
+    // ninguem para administra-lo.
+    if (includeProfile) {
+      const eu = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { papel: true } });
+      const admins = await prisma.user.count({ where: { papel: 'ADMIN', bloqueado_em: null } });
+      if (eu.papel === 'ADMIN' && admins <= 1) {
+        throw new AppError(
+          'VALIDATION_FAILED',
+          'Voce e o unico administrador. Promova outra conta a admin antes de apagar a sua.',
+        );
+      }
+    }
 
     const deleted = await prisma.$transaction(async (tx) => {
       // Ordem explicita em vez de confiar no cascade de cada relacao.

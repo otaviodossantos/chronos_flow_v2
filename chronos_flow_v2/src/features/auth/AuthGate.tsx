@@ -20,7 +20,7 @@ export const AUTH_KEY = ['auth'] as const;
  * porteira continua presa na antiga — o login dava 200 e a tela nao saia da
  * entrada.
  */
-function limparDadosDaConta(queryClient: QueryClient) {
+export function limparDadosDaConta(queryClient: QueryClient) {
   queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== AUTH_KEY[0] });
   // Selecao, busca e filtros tambem sao da conta: a proxima pessoa nao herda.
   useTimelineStore.getState().esquecerConta();
@@ -86,6 +86,41 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+/**
+ * Admin entrando no espaco de outra conta (ou voltando ao proprio). Os dados
+ * na tela passam a ser de outra pessoa: limpa o cache da conta anterior e
+ * relê o estado, como numa troca de login.
+ */
+export function useTrocarEspaco() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (userId: string | null): Promise<void> => {
+      if (userId) await api.adminAtuar(userId);
+      else await api.adminParar();
+    },
+    onSuccess: async () => {
+      limparDadosDaConta(queryClient);
+      await queryClient.refetchQueries({ queryKey: AUTH_KEY });
+    },
+  });
+}
+
+/**
+ * Convite individual: o link do admin traz o token no fragmento
+ * (`/#convite=cv_...`). Fragmento, e nao query string, porque ele nao vai ao
+ * servidor nem aparece em log de proxy.
+ */
+function conviteDoLink(): string | null {
+  const m = window.location.hash.match(/^#convite=([A-Za-z0-9_-]+)$/);
+  return m ? m[1] : null;
+}
+
+function esquecerConviteDoLink() {
+  if (conviteDoLink()) {
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+  }
+}
+
 /** Sair: encerra a sessao no servidor e volta para a entrada com o cache limpo. */
 export function useSair() {
   const queryClient = useQueryClient();
@@ -106,10 +141,11 @@ function EntradaPage({
   estado: AuthEstado;
   onEntrou: (estado: AuthEstado) => void;
 }) {
+  const [doLink] = useState(conviteDoLink);
   const [modo, setModo] = useState<'entrar' | 'cadastro'>(
-    estado.primeiroAcesso && estado.cadastroAberto ? 'cadastro' : 'entrar',
+    doLink || (estado.primeiroAcesso && estado.cadastroAberto) ? 'cadastro' : 'entrar',
   );
-  const [form, setForm] = useState({ nome: '', email: '', senha: '', convite: '' });
+  const [form, setForm] = useState({ nome: '', email: '', senha: '', convite: doLink ?? '' });
   const [erro, setErro] = useState<string | null>(null);
 
   const enviar = useMutation({
@@ -120,9 +156,12 @@ function EntradaPage({
             nome: form.nome,
             email: form.email,
             senha: form.senha,
-            ...(estado.conviteExigido ? { convite: form.convite } : {}),
+            ...(doLink || estado.conviteExigido ? { convite: form.convite } : {}),
           }),
-    onSuccess: onEntrou,
+    onSuccess: (novo) => {
+      esquecerConviteDoLink();
+      onEntrou(novo);
+    },
     onError: (e: ApiError) => {
       const detalhe = Array.isArray(e.details)
         ? (e.details as Array<{ message: string }>)[0]?.message
@@ -171,7 +210,9 @@ function EntradaPage({
               {cadastro ? (estado.primeiroAcesso ? 'Criar a primeira conta' : 'Criar conta') : 'Entrar'}
             </h1>
             <p className="mt-1 text-xs text-muted-foreground">
-              {cadastro && estado.primeiroAcesso
+              {cadastro && doLink
+                ? 'Voce foi convidado. Crie sua conta para comecar.'
+                : cadastro && estado.primeiroAcesso
                 ? 'Os projetos que ja estao neste servidor passam a ser desta conta.'
                 : cadastro
                   ? 'Cada conta ve so os proprios projetos.'
@@ -208,7 +249,12 @@ function EntradaPage({
             />
             {cadastro && <p className="text-[11px] text-muted-foreground">Pelo menos 8 caracteres.</p>}
           </div>
-          {cadastro && estado.conviteExigido && (
+          {cadastro && doLink && (
+            <p className="rounded-md border border-status-good/40 bg-status-good/10 px-3 py-2 text-xs">
+              Convite do link aplicado.
+            </p>
+          )}
+          {cadastro && !doLink && estado.conviteExigido && (
             <div className="space-y-1.5">
               <Label htmlFor="convite">Codigo de convite</Label>
               <Input id="convite" autoComplete="off" required {...campo('convite')} />
@@ -233,7 +279,7 @@ function EntradaPage({
           </Button>
         </form>
 
-        {estado.cadastroAberto && (
+        {(estado.cadastroAberto || doLink) && (
           <p className="mt-4 text-center text-xs text-muted-foreground">
             {cadastro ? 'Ja tem conta? ' : 'Nao tem conta? '}
             <button

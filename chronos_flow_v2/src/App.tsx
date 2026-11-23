@@ -12,6 +12,8 @@ import { BacklogPage } from '@/features/backlog/BacklogPage';
 import { TeamPage } from '@/features/team/TeamPage';
 import { ReportsPage } from '@/features/reports/ReportsPage';
 import { SettingsPage } from '@/features/settings/SettingsPage';
+import { AdminPage } from '@/features/admin/AdminPage';
+import { FaixaDeOutraConta } from '@/features/admin/FaixaDeOutraConta';
 import { FloatingTimerWidget } from '@/features/focus/FloatingTimerWidget';
 import {
   useFloatingWidget,
@@ -54,6 +56,7 @@ function Shell() {
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground antialiased">
       <Toaster richColors position="top-right" theme={theme} />
+      <FaixaDeOutraConta onVoltou={() => setTab('admin')} />
 
       <div className="flex min-h-0 flex-1">
         <Sidebar tab={tab} onTab={setTab} />
@@ -81,6 +84,7 @@ function Shell() {
           )}
           {tab === 'team' && <TeamPage />}
           {tab === 'reports' && <ReportsPage />}
+          {tab === 'admin' && <AdminPage onEntrouNoEspaco={() => setTab('timeline')} />}
           {tab === 'settings' && <SettingsPage />}
         </main>
       </div>

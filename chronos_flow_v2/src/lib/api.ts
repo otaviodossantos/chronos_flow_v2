@@ -12,12 +12,27 @@ import type {
   NodeUpdateDTO,
   SetStatusResult,
   AuthEstado,
+  AdminUsuarioDTO,
+  ConviteDTO,
+  PapelUsuario,
   ApiTokenDTO,
 } from '@shared/types';
 import type { AiPlan } from '@shared/schemas/index';
 import type { Pacote, ResumoDoPacote } from '@shared/transferencia';
 
-const BASE = '/api';
+/**
+ * Para onde vao as chamadas. No navegador e no Electron a tela e servida pelo
+ * proprio servidor, entao `/api` basta e a sessao vai no cookie. O app do
+ * iPhone usa este mesmo cliente contra um servidor de outra origem: troca a
+ * base e manda a sessao no cabecalho (ver `configurarTransporte`).
+ */
+let BASE = '/api';
+let cabecalhosExtras: () => Record<string, string> = () => ({});
+
+export function configurarTransporte(opcoes: { base: string; cabecalhos?: () => Record<string, string> }) {
+  BASE = opcoes.base;
+  cabecalhosExtras = opcoes.cabecalhos ?? (() => ({}));
+}
 
 /**
  * Disparado quando a API responde que a sessao acabou (expirou, foi
@@ -39,7 +54,7 @@ export class ApiError extends Error {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     ...init,
-    headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
+    headers: { 'Content-Type': 'application/json', ...cabecalhosExtras(), ...(init?.headers ?? {}) },
   });
 
   if (!res.ok) {
@@ -117,9 +132,9 @@ export interface RiskRow {
 
 export const api = {
   authEstado: () => request<AuthEstado>('/auth/estado'),
-  cadastro: (body: { nome: string; email: string; senha: string; convite?: string }) =>
+  cadastro: (body: { nome: string; email: string; senha: string; convite?: string; app?: boolean }) =>
     request<AuthEstado>('/auth/cadastro', { method: 'POST', body: JSON.stringify(body) }),
-  entrar: (body: { email: string; senha: string }) =>
+  entrar: (body: { email: string; senha: string; app?: boolean }) =>
     request<AuthEstado>('/auth/entrar', { method: 'POST', body: JSON.stringify(body) }),
   sair: () => request<AuthEstado>('/auth/sair', { method: 'POST' }),
   trocarSenha: (atual: string, nova: string) =>
@@ -134,6 +149,22 @@ export const api = {
       body: JSON.stringify({ nome }),
     }),
   revogarToken: (id: string) => request<{ deleted: boolean }>(`/auth/tokens/${id}`, { method: 'DELETE' }),
+
+  // Administracao (so admin)
+  adminUsuarios: () => request<AdminUsuarioDTO[]>('/admin/usuarios'),
+  adminAtualizarUsuario: (id: string, body: { papel?: PapelUsuario; bloqueado?: boolean }) =>
+    request<{ atualizado: boolean }>(`/admin/usuarios/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  adminAtuar: (userId: string) =>
+    request<{ atuandoComo: string }>('/admin/atuar', { method: 'POST', body: JSON.stringify({ userId }) }),
+  adminParar: () => request<{ atuandoComo: null }>('/admin/parar', { method: 'POST' }),
+  adminConvites: () => request<ConviteDTO[]>('/admin/convites'),
+  adminCriarConvite: (body: { email?: string; dias?: number }) =>
+    request<{ id: string; token: string; email: string | null; expira_em: string }>('/admin/convites', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  adminRevogarConvite: (id: string) =>
+    request<{ revogado: boolean }>(`/admin/convites/${id}`, { method: 'DELETE' }),
 
   tree: (params: {
     rootId?: string;
@@ -232,6 +263,11 @@ export const api = {
 
   focusQueue: (params: { scope?: string; assigneeId?: string }) =>
     request<FocusQueue>(`/focus/queue${qs(params)}`),
+  /** O que fechou desde `desde` (a meia-noite de quem pergunta). */
+  resumoDeHoje: (desde: string) =>
+    request<{ concluidasHoje: number; minutosFocados: number; metaDeMinutos: number; impactoDoDia: number }>(
+      `/focus/hoje${qs({ desde })}`,
+    ),
   simulate: (nodeIds: string[]) =>
     request<{
       projections: Array<{ rootId: string; rootTitle: string; current: number; projected: number }>;

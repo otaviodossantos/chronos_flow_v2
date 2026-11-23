@@ -25,6 +25,7 @@ import templateRoutes from './modules/templates/templates.routes.js';
 import aiRoutes from './modules/ai/ai.routes.js';
 import updateRoutes from './modules/updates/updates.routes.js';
 import authRoutes from './modules/auth/auth.routes.js';
+import adminRoutes from './modules/admin/admin.routes.js';
 import transferRoutes, { nomeDesteComputador } from './modules/transfer/transfer.routes.js';
 import { anunciar, PORTA_DESCOBERTA } from './lib/descoberta.js';
 import { FORMATO_DO_PACOTE } from '../shared/transferencia.js';
@@ -80,6 +81,7 @@ app.use('/api/backlog', backlogRoutes);
 app.use('/api/templates', templateRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/updates', updateRoutes);
+app.use('/api/admin', adminRoutes);
 
 /**
  * A tela sai do mesmo servidor que a API quando `dist` existe. E o que faz o

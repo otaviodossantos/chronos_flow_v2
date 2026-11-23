@@ -22,9 +22,12 @@ import { useThemeStore } from '@/stores/themeStore';
 import { WeeksGrid } from '@/features/life/WeeksGrid';
 import { Transferencia } from './Transferencia';
 import { ContaCard } from './ContaCard';
+import type { AuthEstado } from '@shared/types';
+import { AUTH_KEY } from '@/features/auth/AuthGate';
 
 export function SettingsPage() {
   const queryClient = useQueryClient();
+  const auth = queryClient.getQueryData<AuthEstado>(AUTH_KEY);
   const { theme, toggle } = useThemeStore();
   const { data: user } = useQuery({ queryKey: ['user'], queryFn: api.user });
   const [form, setForm] = useState({
@@ -68,6 +71,27 @@ export function SettingsPage() {
     },
     onError: (e: ApiError) => toast.error(e.message),
   });
+
+  // No espaco de outra conta, as configuracoes sao dela: perfil, senha,
+  // tokens e transferencia continuam so com a propria pessoa.
+  if (auth?.atuandoComo) {
+    return (
+      <div className="h-full overflow-y-auto">
+        <div className="mx-auto max-w-3xl p-6">
+          <h1 className="text-3xl font-semibold tracking-tight">Configuracoes</h1>
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle className="text-base">Configuracoes de {auth.atuandoComo.name}</CardTitle>
+              <CardDescription>
+                Perfil, senha, tokens e transferencia sao da propria pessoa. Volte para o seu espaco (faixa no
+                topo) para mexer nas suas; para bloquear ou mudar o papel dela, use a aba Admin.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full overflow-y-auto">

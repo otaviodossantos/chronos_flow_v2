@@ -30,9 +30,17 @@ export function ContaCard() {
         </CardTitle>
         <CardDescription>
           {estado?.usuario
-            ? `${estado.usuario.name} · ${estado.usuario.email ?? 'sem e-mail'}`
+            ? `${estado.usuario.name} · ${estado.usuario.email ?? 'sem e-mail'}${
+                estado.usuario.papel === 'ADMIN' ? ' · administrador' : ''
+              }`
             : 'Sua conta neste servidor.'}
         </CardDescription>
+        {estado?.usuario?.papel === 'MEMBRO' && (
+          <p className="text-xs text-muted-foreground">
+            Os administradores deste servidor conseguem ver e editar seus projetos. O que eles mudarem aparece na
+            atividade da tarefa com o nome deles.
+          </p>
+        )}
       </CardHeader>
       <CardContent className="space-y-6">
         <ServidorAtual className="justify-start" />

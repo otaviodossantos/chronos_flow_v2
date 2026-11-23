@@ -25,6 +25,7 @@ import {
   refreshRootImpact,
 } from './cascade.service.js';
 import * as repo from './nodes.repository.js';
+import { assinaturaDoAdmin } from '../../lib/sessao.js';
 import type {
   CreateNodeInput,
   UpdateNodeInput,
@@ -41,7 +42,11 @@ import type {
 } from '../../../shared/types.js';
 
 async function logActivity(tx: Tx, nodeId: string, kind: string, message: string) {
-  await tx.nodeActivity.create({ data: { node_id: nodeId, kind, message } });
+  // Admin no espaco de outra conta: a atividade fica no nome dele.
+  const admin = assinaturaDoAdmin();
+  await tx.nodeActivity.create({
+    data: { node_id: nodeId, kind, message, ...(admin ? { actor: admin } : {}) },
+  });
 }
 
 /** Marca em BLOCKED / desbloqueia os nos afetados por uma mudanca de status. */
