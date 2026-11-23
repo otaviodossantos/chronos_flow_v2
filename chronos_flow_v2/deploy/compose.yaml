@@ -1,0 +1,29 @@
+# Chronos Flow com Docker Compose, falando com um Postgres proprio (ver
+# criar-banco.sql). A porta fica so na propria maquina: na frente vai um proxy
+# ou tunel com HTTPS (Caddy, nginx, Cloudflare Tunnel, load balancer).
+#
+# Subir:  docker compose --env-file .env up -d
+name: chronos
+
+services:
+  chronos:
+    image: ${CHRONOS_IMAGEM:-chronos-flow:latest}
+    container_name: chronos
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "127.0.0.1:3101:3101"
+    # Teto de recursos: util quando a maquina e dividida com outros sistemas.
+    mem_limit: 512m
+    cpus: 1.0
+    # Tambem aqui, e nao so no Dockerfile: imagem gerada em formato OCI (Podman)
+    # perde o HEALTHCHECK da imagem.
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3101/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 40s
+      retries: 3
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
