@@ -31,7 +31,11 @@ export function ContaCard() {
         <CardDescription>
           {estado?.usuario
             ? `${estado.usuario.name} · ${estado.usuario.email ?? 'sem e-mail'}${
-                estado.usuario.papel === 'ADMIN' ? ' · administrador' : ''
+                estado.usuario.dono
+                  ? ' · dona do servidor (sempre admin)'
+                  : estado.usuario.papel === 'ADMIN'
+                    ? ' · administrador'
+                    : ''
               }`
             : 'Sua conta neste servidor.'}
         </CardDescription>

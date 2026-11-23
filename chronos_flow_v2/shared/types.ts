@@ -179,7 +179,7 @@ export type PapelUsuario = 'ADMIN' | 'MEMBRO';
 export interface AuthEstado {
   autenticado: boolean;
   /** A pessoa logada (o admin, quando ele esta no espaco de outra conta). */
-  usuario: { id: string; name: string; email: string | null; papel: PapelUsuario } | null;
+  usuario: { id: string; name: string; email: string | null; papel: PapelUsuario; dono: boolean } | null;
   /** Admin agindo no espaco de outra conta: de quem sao os dados na tela. */
   atuandoComo: { id: string; name: string; email: string | null } | null;
   /** So na resposta de entrar/cadastrar pelo app: o token da sessao do aparelho. */
@@ -200,6 +200,8 @@ export interface AdminUsuarioDTO {
   name: string;
   email: string | null;
   papel: PapelUsuario;
+  /** A conta 0: sempre admin, nunca bloqueada nem apagada. */
+  dono: boolean;
   bloqueado_em: string | null;
   created_at: string;
   ultimo_acesso: string | null;

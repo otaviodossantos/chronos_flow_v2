@@ -44,6 +44,9 @@ model User {
   password_hash            String?
   /// A primeira conta do servidor nasce ADMIN; as outras, MEMBRO.
   papel                    PapelUsuario @default(MEMBRO)
+  /// A conta 0: a primeira do servidor. E sempre ADMIN — ninguem tira o
+  /// papel, bloqueia ou apaga ela, nem ela mesma. So existe uma.
+  dono                     Boolean      @default(false)
   /// Preenchido = conta bloqueada pelo admin: nao entra, e sessoes e tokens caem.
   bloqueado_em             DateTime?
   birth_date               DateTime     @default("1990-01-01T00:00:00.000Z")

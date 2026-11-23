@@ -19,6 +19,7 @@ export type ErrorCode =
   | 'PAREAMENTO_OCUPADO'
   | 'SO_ADMIN'
   | 'CONTA_BLOQUEADA'
+  | 'CONTA_DONA'
   | 'INTERNAL';
 
 const STATUS: Record<ErrorCode, number> = {
@@ -43,6 +44,7 @@ const STATUS: Record<ErrorCode, number> = {
   PAREAMENTO_OCUPADO: 409,
   SO_ADMIN: 403,
   CONTA_BLOQUEADA: 403,
+  CONTA_DONA: 403,
   INTERNAL: 500,
 };
 

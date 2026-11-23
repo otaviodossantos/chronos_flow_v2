@@ -96,7 +96,13 @@ router.post(
     // Apagar o proprio perfil sendo o ultimo admin deixaria o servidor sem
     // ninguem para administra-lo.
     if (includeProfile) {
-      const eu = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { papel: true } });
+      const eu = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { papel: true, dono: true } });
+      if (eu.dono) {
+        throw new AppError(
+          'CONTA_DONA',
+          'A conta dona do servidor nao pode ser apagada. Da para apagar os projetos, mantendo o perfil.',
+        );
+      }
       const admins = await prisma.user.count({ where: { papel: 'ADMIN', bloqueado_em: null } });
       if (eu.papel === 'ADMIN' && admins <= 1) {
         throw new AppError(

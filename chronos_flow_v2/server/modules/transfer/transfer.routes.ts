@@ -95,7 +95,7 @@ const DA_CONTA: Record<TabelaDoPacote, (userId: string) => Record<string, unknow
  * servidor) e a chave da IA, que e segredo — a tela de ajustes so a mostra
  * mascarada, e o pacote nao pode ser o atalho para le-la inteira.
  */
-const SO_NO_SERVIDOR = ['email', 'password_hash', 'gemini_api_key', 'papel', 'bloqueado_em'];
+const SO_NO_SERVIDOR = ['email', 'password_hash', 'gemini_api_key', 'papel', 'bloqueado_em', 'dono'];
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

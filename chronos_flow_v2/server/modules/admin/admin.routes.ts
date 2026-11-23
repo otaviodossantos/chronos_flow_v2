@@ -58,6 +58,7 @@ router.get(
         name: true,
         email: true,
         papel: true,
+        dono: true,
         bloqueado_em: true,
         created_at: true,
         spaces: { where: { archived: false }, select: { id: true, name: true, color: true }, orderBy: { position: 'asc' } },
@@ -81,6 +82,7 @@ router.get(
       name: u.name,
       email: u.email,
       papel: u.papel,
+      dono: u.dono,
       bloqueado_em: u.bloqueado_em?.toISOString() ?? null,
       created_at: u.created_at.toISOString(),
       ultimo_acesso: de(acessos, u.id)?._max.last_seen_at?.toISOString() ?? null,
@@ -100,6 +102,11 @@ router.patch(
     const alvo = await prisma.user.findFirst({ where: { id: req.params.id, email: { not: null } } });
     if (!alvo) throw notFound('Usuario');
     const eu = admin();
+
+    // A conta 0 e sempre admin e nunca e bloqueada — por ninguem, nem por ela.
+    if (alvo.dono && (body.papel === 'MEMBRO' || body.bloqueado === true)) {
+      throw new AppError('CONTA_DONA', 'A conta dona do servidor e sempre admin: nao da para tirar o papel nem bloquear.');
+    }
 
     if (body.bloqueado !== undefined && alvo.id === eu) {
       throw new AppError('VALIDATION_FAILED', 'Voce nao pode bloquear a propria conta.');

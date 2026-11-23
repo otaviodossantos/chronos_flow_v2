@@ -89,7 +89,7 @@ async function estado(req: Request, quem: Quem | null): Promise<AuthEstado> {
     real
       ? prisma.user.findUnique({
           where: { id: real },
-          select: { id: true, name: true, email: true, papel: true },
+          select: { id: true, name: true, email: true, papel: true, dono: true },
         })
       : null,
     quem?.adminId
@@ -182,7 +182,7 @@ router.post(
       ? await prisma.user.findFirst({ where: { password_hash: null }, orderBy: { created_at: 'asc' } })
       : null;
 
-    // A primeira conta do servidor e a administradora.
+    // A primeira conta do servidor e a dona: admin para sempre (ver `dono`).
     const papel = primeiro ? 'ADMIN' : 'MEMBRO';
 
     const userId = await prisma.$transaction(async (tx) => {
@@ -202,12 +202,16 @@ router.post(
         // acesso, so uma leva os dados; a outra recebe o cadastro fechado.
         const { count } = await tx.user.updateMany({
           where: { id: antigo.id, password_hash: null },
-          data: { name: body.nome, email: body.email, password_hash, papel },
+          data: { name: body.nome, email: body.email, password_hash, papel, dono: primeiro },
         });
         if (count === 0) throw new AppError('CADASTRO_FECHADO', 'Outra pessoa acabou de criar a primeira conta.');
         id = antigo.id;
       } else {
-        id = (await tx.user.create({ data: { name: body.nome, email: body.email, password_hash, papel } })).id;
+        id = (
+          await tx.user.create({
+            data: { name: body.nome, email: body.email, password_hash, papel, dono: primeiro },
+          })
+        ).id;
       }
 
       if (conviteId) await tx.convite.update({ where: { id: conviteId }, data: { usado_por_id: id } });
